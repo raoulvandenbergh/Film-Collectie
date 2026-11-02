@@ -597,7 +597,7 @@ async function spotifySearchSoundtrack(f){
  for(const q of queries){
   if(searched.has(q))continue;
   searched.add(q);
-  const data=await spotifyApi('/search?'+new URLSearchParams({q,type:'album',limit:'20'}));
+  const data=await spotifyApi('/search?'+new URLSearchParams({q,type:'album',limit:'10'}));
   const items=data.albums?.items||[];
   const filmNames=titles.map(spotifyNormalizeTitle);
   const match=items.find(a=>{
