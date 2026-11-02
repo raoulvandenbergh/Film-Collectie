@@ -605,9 +605,21 @@ async function openFilmSoundtrack(f){
    if(!Number.isInteger(n)||n<1||n>devices.length){alert('Ongeldige apparaatkeuze.');return;}
    device=devices[n-1];
   }
-  const body=uri.startsWith('spotify:track:')?{uris:[uri],position_ms:0}:{context_uri:uri,offset:{position:0},position_ms:0};
+  let body;
+  if(uri.startsWith('spotify:track:')){
+   // Speel het album af met een offset naar het gekozen nummer. Dit vermijdt
+   // de directe track-queue die op sommige Spotify Connect-apparaten stilvalt.
+   const trackId=uri.split(':')[2];
+   const track=await spotifyApi('/tracks/'+encodeURIComponent(trackId));
+   if(!track?.album?.uri?.startsWith('spotify:album:')){
+    throw Error('Spotify kon het album van dit nummer niet ophalen.');
+   }
+   body={context_uri:track.album.uri,offset:{uri},position_ms:0};
+  }else{
+   body={context_uri:uri,offset:{position:0},position_ms:0};
+  }
   await spotifyApi('/me/player/play?device_id='+encodeURIComponent(device.id),{method:'PUT',body:JSON.stringify(body)});
-  alert('Afspeelopdracht verstuurd naar '+device.name+'.\n\nAls de afspeelbalk zwart blijft, vertel me welk apparaat je hebt gekozen.');
+  alert('Afspeelopdracht verstuurd naar '+device.name+'.\n\nControleer of het gekozen nummer nu afspeelt.');
  }catch(e){alert('Spotify kon niet afspelen: '+e.message)}
 }
 spotifyCallback();
