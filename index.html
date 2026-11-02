@@ -512,23 +512,88 @@ function configureSpotify(f){
  alert(uri?'Soundtracknummer gekoppeld! Klik op SOUNDTRACK om het in Spotify te openen.':'Spotify-koppeling gewist.');
  return !!uri;
 }
-function openFilmSoundtrack(f){
- const key=spotifyFilmKey(f),map=spotifyMap();
- if(!map[key]){
-   // Approximate fallback for the entire imported collection, not a verified track.
-   // Never silently pretend a search is an exact soundtrack match.
-   const q=String(f.title||'')+' '+String(f.year||'')+' original motion picture soundtrack';
-   const search='https://open.spotify.com/search/'+encodeURIComponent(q);
-   if(confirm('Voor deze film is nog geen exact soundtracknummer bevestigd.\n\nSpotify openen met een voorgestelde soundtrackzoekopdracht?\n\nGebruik daarna ‘Wijzig nummer’ om de juiste track permanent te koppelen.')){
-     window.open(search,'_blank','noopener');
-   }
-   return;
- }
- const uri=spotifyTrackUri(map[key]);
- if(!uri){configureSpotify(f);return}
- // Direct user gesture; never claim automatic playback succeeded.
- window.location.href=uri;
+
+// Spotify Web API Authorization Code + PKCE; geen Client Secret in de website.
+const SPOTIFY_CLIENT_ID='5828240e04b34668983512b0aedf92d6';
+const SPOTIFY_REDIRECT='https://raoulvandenbergh.github.io/Film-Collectie/';
+const SPOTIFY_SCOPES='user-read-playback-state user-modify-playback-state';
+const SPOTIFY_TOKEN_KEY='filmCollectionSpotifyOAuthV1';
+function spotifyTokens(){try{return JSON.parse(sessionStorage.getItem(SPOTIFY_TOKEN_KEY)||'null')}catch(e){return null}}
+function spotifySaveTokens(t){sessionStorage.setItem(SPOTIFY_TOKEN_KEY,JSON.stringify(t))}
+function spotifyBase64Url(bytes){return btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+async function spotifyHash(text){return spotifyBase64Url(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))))}
+async function spotifyLogin(){
+ if(location.origin+location.pathname!==SPOTIFY_REDIRECT){alert('Open eerst de online Film Collectie op '+SPOTIFY_REDIRECT+' om Spotify te verbinden.');return}
+ const verifier=spotifyBase64Url(crypto.getRandomValues(new Uint8Array(64)));
+ const state=spotifyBase64Url(crypto.getRandomValues(new Uint8Array(20)));
+ sessionStorage.setItem('filmSpotifyVerifier',verifier);
+ sessionStorage.setItem('filmSpotifyState',state);
+ const url=new URL('https://accounts.spotify.com/authorize');
+ Object.entries({client_id:SPOTIFY_CLIENT_ID,response_type:'code',redirect_uri:SPOTIFY_REDIRECT,scope:SPOTIFY_SCOPES,code_challenge_method:'S256',code_challenge:await spotifyHash(verifier),state}).forEach(([k,v])=>url.searchParams.set(k,v));
+ location.assign(url.href);
 }
+async function spotifyTokenRequest(params){
+ const r=await fetch('https://accounts.spotify.com/api/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(params)});
+ const data=await r.json();if(!r.ok)throw Error(data.error_description||data.error||'Spotify-inloggen mislukt');
+ spotifySaveTokens({access_token:data.access_token,refresh_token:data.refresh_token||spotifyTokens()?.refresh_token,expires_at:Date.now()+data.expires_in*1000});
+ return data.access_token;
+}
+async function spotifyCallback(){
+ const url=new URL(location.href),code=url.searchParams.get('code'),error=url.searchParams.get('error');
+ if(!code&&!error)return;
+ url.searchParams.delete('code');url.searchParams.delete('state');url.searchParams.delete('error');
+ history.replaceState(null,'',url.pathname+url.search+url.hash);
+ if(error){alert('Spotify-login geannuleerd: '+error);return}
+ const verifier=sessionStorage.getItem('filmSpotifyVerifier'),state=sessionStorage.getItem('filmSpotifyState');
+ sessionStorage.removeItem('filmSpotifyVerifier');sessionStorage.removeItem('filmSpotifyState');
+ try{
+  if(!verifier||!state||state!==spotifyCallbackState)throw Error('Spotify-login kon niet worden geverifieerd. Probeer opnieuw.');
+  await spotifyTokenRequest({client_id:SPOTIFY_CLIENT_ID,grant_type:'authorization_code',code,redirect_uri:SPOTIFY_REDIRECT,code_verifier:verifier});
+  alert('Spotify is verbonden! Open een film en klik op SOUNDTRACK.');
+ }catch(e){alert(e.message)}
+}
+const spotifyCallbackState=new URL(location.href).searchParams.get('state');
+async function spotifyAccessToken(){
+ const t=spotifyTokens();if(!t)return null;
+ if(t.access_token&&Date.now()<t.expires_at-60000)return t.access_token;
+ if(!t.refresh_token)return null;
+ return spotifyTokenRequest({client_id:SPOTIFY_CLIENT_ID,grant_type:'refresh_token',refresh_token:t.refresh_token});
+}
+async function spotifyApi(path,options={}){
+ const token=await spotifyAccessToken();if(!token)throw Error('Spotify is nog niet verbonden.');
+ const r=await fetch('https://api.spotify.com/v1'+path,{...options,headers:{Authorization:'Bearer '+token,...(options.body?{'Content-Type':'application/json'}:{})}});
+ if(r.status===204)return null;
+ const body=await r.json().catch(()=>({}));
+ if(!r.ok)throw Error(body.error?.message||'Spotify API-fout ('+r.status+')');
+ return body;
+}
+async function spotifySearchSoundtrack(f){
+ const queries=[`album:${f.title} soundtrack`,`${f.title} ${f.year||''} original motion picture soundtrack`];
+ for(const q of queries){
+  const data=await spotifyApi('/search?'+new URLSearchParams({q,type:'album',limit:'10'}));
+  const items=data.albums?.items||[];
+  const title=String(f.title).toLowerCase();
+  const match=items.find(a=>a.name.toLowerCase().includes(title)&&/soundtrack|motion picture|original score|film score/i.test(a.name));
+  if(match)return match.uri;
+ }
+ return null;
+}
+async function openFilmSoundtrack(f){
+ try{
+  if(!await spotifyAccessToken()){
+   if(confirm('Spotify verbinden om soundtracks direct af te spelen?'))await spotifyLogin();
+   return;
+  }
+  const stored=spotifyTrackUri(spotifyMap()[spotifyFilmKey(f)]);
+  const uri=stored||await spotifySearchSoundtrack(f);
+  if(!uri){window.open('https://open.spotify.com/search/'+encodeURIComponent(f.title+' '+f.year+' soundtrack'),'_blank','noopener');alert('Geen passend soundtrackalbum gevonden. Spotify-zoekresultaten zijn geopend.');return}
+  const state=await spotifyApi('/me/player');
+  if(!state?.device?.id){alert('Open Spotify op je computer of telefoon, speel daar even iets af en probeer opnieuw.');return}
+  await spotifyApi('/me/player/play?device_id='+encodeURIComponent(state.device.id),{method:'PUT',body:JSON.stringify(uri.startsWith('spotify:track:')?{uris:[uri]}:{context_uri:uri})});
+  alert('Soundtrack gestart op '+state.device.name+'.');
+ }catch(e){alert('Spotify: '+e.message)}
+}
+spotifyCallback();
 
 function updateExternalFilmLinks(f){if(activeDetailId!==DATA.films.indexOf(f))return;const imdb=document.querySelector('[data-external="imdb"]'),lb=document.querySelector('[data-external="letterboxd"]');if(imdb){imdb.href=imdbFilmUrl(f);imdb.title=f._imdbId?'Open de exacte IMDb-filmpagina':'Zoek film op IMDb (nog niet gekoppeld)'}if(lb){lb.href=letterboxdFilmUrl(f);lb.title=f._tmdbId?'Open film op Letterboxd':'Zoek film op Letterboxd (nog niet gekoppeld)'}}
 function detail(f){
