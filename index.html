@@ -619,7 +619,25 @@ async function openFilmSoundtrack(f){
    body={context_uri:uri,offset:{position:0},position_ms:0};
   }
   await spotifyApi('/me/player/play?device_id='+encodeURIComponent(device.id),{method:'PUT',body:JSON.stringify(body)});
-  alert('Afspeelopdracht verstuurd naar '+device.name+'.\n\nControleer of het gekozen nummer nu afspeelt.');
+  // Controleer de werkelijke afspeelstatus: een geslaagde API-opdracht garandeert geen geluid.
+  const observations=[];
+  for(let attempt=0;attempt<3;attempt++){
+   await new Promise(resolve=>setTimeout(resolve,attempt===0?1200:1800));
+   try{
+    const playback=await spotifyApi('/me/player?additional_types=track');
+    const playing=playback?.is_playing===true;
+    const item=playback?.item;
+    const name=item?.name||'geen nummer';
+    const actualDevice=playback?.device?.name||'onbekend';
+    observations.push((attempt+1)+': '+(playing?'speelt':'speelt niet')+' | '+name+' | '+actualDevice);
+    if(playing&&item?.uri===uri){
+     alert('Spotify bevestigt dat '+name+' afspeelt op '+actualDevice+'.');
+     return;
+    }
+   }catch(checkError){observations.push((attempt+1)+': controle mislukt — '+checkError.message);}
+  }
+  const diagnostics='Spotify heeft de opdracht geaccepteerd, maar het gewenste nummer is niet als spelend bevestigd.\n\nGekozen apparaat: '+device.name+'\nGewenste URI: '+uri+'\n\nControle (na 1,2 / 3 / 4,8 seconden):\n'+observations.join('\n');
+  alert(diagnostics+'\n\nKopieer deze melding of maak er een screenshot van en stuur die in onze chat.');
  }catch(e){alert('Spotify kon niet afspelen: '+e.message)}
 }
 spotifyCallback();
