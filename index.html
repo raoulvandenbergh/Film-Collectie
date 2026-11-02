@@ -569,13 +569,43 @@ async function spotifyApi(path,options={}){
  if(!r.ok)throw Error(body.error?.message||'Spotify API-fout ('+r.status+')');
  return body;
 }
+// Zoek eerst naar een overtuigende soundtrackmatch. Speel nooit automatisch
+// een willekeurig album af dat toevallig dezelfde naam heeft.
+function spotifyFilmTitleVariants(title){
+ const raw=String(title||'').trim();
+ const variants=[raw];
+ // Spotify gebruikt soms een andere notatie voor 8½ en vergelijkbare titels.
+ if(raw.includes('½'))variants.push(raw.replace(/½/g,' 1/2'),raw.replace(/½/g,'.5'));
+ if(raw.includes('&'))variants.push(raw.replace(/&/g,'and'));
+ return [...new Set(variants.filter(Boolean))];
+}
+function spotifyNormalizeTitle(value){
+ return String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
+  .toLowerCase().replace(/½/g,'1/2').replace(/[^a-z0-9]+/g,' ').trim();
+}
 async function spotifySearchSoundtrack(f){
- const queries=[`album:${f.title} soundtrack`,`${f.title} ${f.year||''} original motion picture soundtrack`];
+ const titles=spotifyFilmTitleVariants(f.title);
+ const year=String(f.year||'').trim();
+ const queries=[];
+ for(const title of titles){
+  queries.push(title+' original motion picture soundtrack');
+  queries.push(title+' original score');
+  queries.push(title+' film soundtrack');
+  if(year)queries.push(title+' '+year+' soundtrack');
+ }
+ const searched=new Set();
  for(const q of queries){
-  const data=await spotifyApi('/search?'+new URLSearchParams({q,type:'album',limit:'10'}));
+  if(searched.has(q))continue;
+  searched.add(q);
+  const data=await spotifyApi('/search?'+new URLSearchParams({q,type:'album',limit:'20'}));
   const items=data.albums?.items||[];
-  const title=String(f.title).toLowerCase();
-  const match=items.find(a=>a.name.toLowerCase().includes(title)&&/soundtrack|motion picture|original score|film score/i.test(a.name));
+  const filmNames=titles.map(spotifyNormalizeTitle);
+  const match=items.find(a=>{
+   const name=spotifyNormalizeTitle(a.name);
+   const matchingTitle=filmNames.some(t=>t&&(name===t||name.startsWith(t+' ')||name.includes(' '+t+' ')));
+   const soundtrackWords=/soundtrack|motion picture|original score|film score|colonna sonora|bande originale|musique du film|original film|music from the film/i.test(a.name);
+   return matchingTitle&&soundtrackWords;
+  });
   if(match)return match.uri;
  }
  return null;
@@ -589,7 +619,7 @@ async function openFilmSoundtrack(f){
   const stored=spotifyTrackUri(spotifyMap()[spotifyFilmKey(f)]);
   const uri=stored||await spotifySearchSoundtrack(f);
   if(!uri){
-   alert('Geen passend soundtrackalbum gevonden. Kies via Wijzig nummer een specifiek Spotify-nummer.');
+   window.open('https://open.spotify.com/search/'+encodeURIComponent(String(f.title||'')+' '+String(f.year||'')+' soundtrack'),'_blank','noopener');
    return;
   }
   // Vraag Spotify expliciet naar de beschikbare apparaten, in plaats van alleen
@@ -632,7 +662,7 @@ async function openFilmSoundtrack(f){
     const name=item?.name||'geen nummer';
     const actualDevice=playback?.device?.name||'onbekend';
     observations.push((attempt+1)+': '+(playing?'speelt':'speelt niet')+' | '+name+' | '+actualDevice);
-    if(playing&&item?.uri===uri){
+    if(playing&&(uri.startsWith('spotify:album:')||item?.uri===uri)){
      return;
     }
    }catch(checkError){observations.push((attempt+1)+': controle mislukt — '+checkError.message);}
