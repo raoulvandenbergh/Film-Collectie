@@ -631,7 +631,6 @@ async function openFilmSoundtrack(f){
     const actualDevice=playback?.device?.name||'onbekend';
     observations.push((attempt+1)+': '+(playing?'speelt':'speelt niet')+' | '+name+' | '+actualDevice);
     if(playing&&item?.uri===uri){
-     alert('Spotify bevestigt dat '+name+' afspeelt op '+actualDevice+'.');
      return;
     }
    }catch(checkError){observations.push((attempt+1)+': controle mislukt — '+checkError.message);}
