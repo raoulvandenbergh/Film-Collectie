@@ -933,7 +933,7 @@ document.getElementById('syncFilmIdsButton').addEventListener('click',async()=>{
  button.disabled=true;button.textContent='Bezig met koppelen…';
  result.hidden=false;result.textContent='Eén film controleren…';
  try{
-  const token=await getAdminToken();
+  const token=await adminAccessToken();
   const response=await fetch(SUPABASE_URL+'/functions/v1/sync-film-ids',{
    method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_PUBLISHABLE_KEY,'Authorization':'Bearer '+token},body:'{}'
   });
