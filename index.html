@@ -881,18 +881,9 @@ async function synchronizeDiary(indicator,filmCount,editionCount){
    return {title,date:r.watched_on||'',format:r.watched_format||'',edition:r.watched_edition||'',cut:r.watched_cut||'',rating:r.rating??'',_year:r.film_year??'',_dbId:r.id,_editionId:r.edition_id??null,_createdAt:r.created_at||r.inserted_at||''};
   });
   DATA.history=converted;
-  // De meest recente gedateerde kijkbeurt met een eigen rating bepaalt de
-  // zichtbare filmrating, ook voor kijkbeurten die vóór deze versie zijn opgeslagen.
-  const latestRated=new Map();
-  for(const r of records){
-   if(r.film_id==null||r.rating==null||r.watched_on==null)continue;
-   const ix=filmIndexById.get(r.film_id);
-   if(ix===undefined)continue;
-   const prior=latestRated.get(ix);
-   const key=String(r.watched_on)+'|'+String(r.created_at||r.inserted_at||'')+'|'+String(r.id||'');
-   if(!prior||key>prior.key)latestRated.set(ix,{key,rating:r.rating});
-  }
-  for(const [ix,item] of latestRated)DATA.films[ix].rating=item.rating;
+  // v57: films.my_rating is the authoritative current personal rating.
+  // Watching a film updates that field, and manual edits update it too.
+  // Historical watch ratings remain independent and are never overwritten here.
   // Avoid double-counting local test entries from earlier prototypes.
   extraWatches=[];
   // The Excel-era aggregate watched flags are not authoritative for all historical rows.
