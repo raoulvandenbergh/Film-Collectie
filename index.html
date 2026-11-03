@@ -700,8 +700,8 @@ async function openFilmSoundtrack(f){
     }
    }catch(checkError){observations.push((attempt+1)+': controle mislukt — '+checkError.message);}
   }
-  const diagnostics='Spotify heeft de opdracht geaccepteerd, maar het gewenste nummer is niet als spelend bevestigd.\n\nGekozen apparaat: '+device.name+'\nGewenste URI: '+uri+'\n\nControle (na 1,2 / 3 / 4,8 seconden):\n'+observations.join('\n');
-  alert(diagnostics+'\n\nKopieer deze melding of maak er een screenshot van en stuur die in onze chat.');
+  // Geen storende diagnose-pop-up wanneer Spotify de afspeelopdracht al heeft geaccepteerd.
+  // Een echte API-fout wordt nog wel afgehandeld in de catch hieronder.
  }catch(e){alert('Spotify kon niet afspelen: '+e.message)}
 }
 spotifyCallback();
