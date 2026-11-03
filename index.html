@@ -781,12 +781,13 @@ function watchCountTag(n,seen){return `<span class="edition-watch-count" title="
 function detail(f){
  const id=DATA.films.indexOf(f);activeDetailId=id;for(const key of ['editFilmButton','deleteFilmButton']){const b=document.getElementById(key);if(b)b.style.display=window.__filmAdminSignedIn?'inline-block':'none';}
  const watched=filmHistory(f);
+ const watchCounts=editionWatchCounts(f);
  const latest=watched.map(h=>h.date).filter(Boolean).sort().reverse()[0];
  const lastSeen=formatDate(latest);
  const editionMinutes=e=>{const n=Number(e.runtime);return Number.isFinite(n)&&n>0?Math.round(n):null};
  const runtimes=[...new Set(f.editions.map(editionMinutes).filter(n=>n!==null))].sort((a,b)=>a-b);
  const runtimeText=runtimes.length?runtimes.map(n=>n+' min').join(' / '):(f.runtime?esc(f.runtime)+' min':'–');
- const editions=f.editions.map(e=>`<div class="edition"><b>${esc(e.format||'–')}</b> · ${esc(e.edition||'Standaard')}<br><span class="muted">${esc(e.label||'')}${e.title&&e.title.toLowerCase()!==f.title.toLowerCase()?' · '+esc(e.title):''}</span></div>`).join('');
+ const editions=f.editions.map(e=>`<div class="edition edition-with-count">${watchCountTag(watchCounts.editions.get(String(e.dbId))||0,Boolean(e.discSeen||e.disc_seen||e.disc_seen===true))}<b>${esc(e.format||'–')}</b> · ${esc(e.edition||'Standaard')}<br><span class="muted">${esc(e.label||'')}${e.title&&e.title.toLowerCase()!==f.title.toLowerCase()?' · '+esc(e.title):''}</span></div>`).join('');
  const cuts=[...new Map(f.editions.map(e=>[e.title||f.title,e.title||f.title])).values()].map(title=>({
    title,
    runtimes:[...new Set(f.editions.filter(e=>(e.title||f.title)===title).map(editionMinutes).filter(n=>n!==null))].sort((a,b)=>a-b)
