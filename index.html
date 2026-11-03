@@ -445,6 +445,13 @@ $('saveWatch').onclick=async()=>{
   const source='website-v41-'+(typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(36).slice(2));
   const record={film_id:filmId,film_title:f.title,film_year:Number(f.year)||null,watched_on:date,rating:ratingText===''?null:Number(ratingText),edition_id:ed?.dbId||null,watched_format:ed?.format||null,watched_edition:ed?.edition||null,watched_label:ed?.label||null,watched_cut:cut,import_source:source};
   await adminRest('watch_history','POST',record,token);
+  let ratingError='';
+  if(record.rating!==null){
+   try{
+    await adminRest('films','PATCH',{my_rating:record.rating},token,'?id=eq.'+encodeURIComponent(filmId));
+    f.rating=record.rating;
+   }catch(e){ratingError=' Kijkbeurt opgeslagen, maar je filmrating bijwerken mislukte: '+e.message;}
+  }
   let lbError='';
   if(lb!==null&&lb!==Number(f.letterboxd)){
    try{await adminRest('films','PATCH',{letterboxd_rating:lb},token,'?id=eq.'+encodeURIComponent(filmId));f.letterboxd=lb;}catch(e){lbError=' Kijkbeurt opgeslagen, maar Letterboxd bijwerken mislukte: '+e.message;}
@@ -452,7 +459,7 @@ $('saveWatch').onclick=async()=>{
   // Herlaad vanuit de database zodat alle kijkbeurten en aantallen consistent blijven.
   await synchronizeDiary(document.getElementById('supabaseSync'),DATA.films.length,DATA.stats.editions);
   $('watchDialog').hidden=true;updateDiary();updateCounts();render();detail(f);
-  if(lbError)alert(lbError);
+  if(ratingError||lbError)alert((ratingError+lbError).trim());
  }catch(e){$('watchMessage').textContent='Opslaan mislukt: '+e.message;}
  finally{btn.disabled=false;}
 };
@@ -874,6 +881,18 @@ async function synchronizeDiary(indicator,filmCount,editionCount){
    return {title,date:r.watched_on||'',format:r.watched_format||'',edition:r.watched_edition||'',cut:r.watched_cut||'',rating:r.rating??'',_year:r.film_year??'',_dbId:r.id,_editionId:r.edition_id??null,_createdAt:r.created_at||r.inserted_at||''};
   });
   DATA.history=converted;
+  // De meest recente gedateerde kijkbeurt met een eigen rating bepaalt de
+  // zichtbare filmrating, ook voor kijkbeurten die vóór deze versie zijn opgeslagen.
+  const latestRated=new Map();
+  for(const r of records){
+   if(r.film_id==null||r.rating==null||r.watched_on==null)continue;
+   const ix=filmIndexById.get(r.film_id);
+   if(ix===undefined)continue;
+   const prior=latestRated.get(ix);
+   const key=String(r.watched_on)+'|'+String(r.created_at||r.inserted_at||'')+'|'+String(r.id||'');
+   if(!prior||key>prior.key)latestRated.set(ix,{key,rating:r.rating});
+  }
+  for(const [ix,item] of latestRated)DATA.films[ix].rating=item.rating;
   // Avoid double-counting local test entries from earlier prototypes.
   extraWatches=[];
   // The Excel-era aggregate watched flags are not authoritative for all historical rows.
@@ -1007,7 +1026,20 @@ document.getElementById('saveEditWatch').onclick=async()=>{
  const rating=document.getElementById('editWatchRating').value;
  const payload={watched_on:date,rating:rating===''?null:Number(rating),watched_cut:document.getElementById('editWatchCut').value||null,edition_id:ed?.dbId||null,watched_format:ed?.format||null,watched_edition:ed?.edition||null,watched_label:ed?.label||null};
  const btn=document.getElementById('saveEditWatch');btn.disabled=true;document.getElementById('editWatchMessage').textContent='Opslaan…';
- try{await mutateWatch('PATCH',payload)}catch(e){document.getElementById('editWatchMessage').textContent='Opslaan mislukt: '+e.message}finally{btn.disabled=false}
+ try{
+  await mutateWatch('PATCH',payload);
+  if(entry._dbId!=null&&payload.rating!==null){
+   const filmId=f?window.__supabaseFilmIds?.[DATA.films.indexOf(f)]:null;
+   if(filmId){
+    const latest=DATA.history.filter(w=>diaryFilm(w.title)===f&&w.rating!==''&&w.rating!=null)
+     .sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b._createdAt).localeCompare(String(a._createdAt)))[0];
+    if(latest){
+     try{await adminRest('films','PATCH',{my_rating:Number(latest.rating)},await adminAccessToken(),'?id=eq.'+encodeURIComponent(filmId));f.rating=Number(latest.rating);render();detail(f)}
+     catch(err){alert('Kijkbeurt aangepast, maar de filmrating kon niet worden bijgewerkt: '+err.message)}
+    }
+   }
+  }
+ }catch(e){document.getElementById('editWatchMessage').textContent='Opslaan mislukt: '+e.message}finally{btn.disabled=false}
 };
 document.getElementById('deleteWatch').onclick=async()=>{
  if(!adminSession||editWatchId==null)return;
