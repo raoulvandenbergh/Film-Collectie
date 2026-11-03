@@ -413,13 +413,13 @@ function cutName(editionTitle,filmTitle){
  tail=tail.replace(/^[-–: ]+/,'').replace(/^\((.*)\)$/,'$1').trim();
  return tail||'Standaardversie';
 }
-function watchCuts(f){return [...new Set(f.editions.map(e=>cutName(e.title,f.title)))];}
+function watchCuts(f){return f.cuts?.length?[...new Set(f.cuts.map(c=>cutName(c.title,f.title)))]:[...new Set(f.editions.map(e=>cutName(e.title,f.title)))];}
 $('markWatched').onclick=()=>{
  if(!adminSession){alert('Log eerst in als beheerder.');return;}
  const f=DATA.films[activeDetailId];if(!f)return;
  $('watchMovieName').textContent=f.title;$('watchDate').value=todayLocal();$('watchMessage').textContent='';
  const cuts=watchCuts(f);const showCuts=cuts.length>1;
- $('watchCutWrap').hidden=!showCuts;
+ $('watchCutWrap').hidden=false;
  $('watchCut').innerHTML='<option value="">Kies een cut…</option>'+cuts.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
  $('watchCut').value=showCuts?'':(cuts[0]||'Standaardversie');
  $('watchEdition').innerHTML='<option value="">Niet vanaf mijn eigen collectie (disc blijft ongezien)</option>'+f.editions.map((e,i)=>`<option value="${i}">${esc(e.format||'')} · ${esc(e.edition||'')} · ${esc(e.title||f.title)}</option>`).join('');
@@ -447,7 +447,7 @@ async function adminRest(table,method,body,token,query=''){
  if(!response.ok)throw new Error((data?.message||data?.details||'HTTP '+response.status));
  return data;
 }
-$('watchEdition').addEventListener('change',()=>{const f=DATA.films[activeDetailId];const ix=$('watchEdition').value;if(f&&ix!==''&&!$('watchCutWrap').hidden)$('watchCut').value=cutName(f.editions[Number(ix)].title,f.title);});
+$('watchEdition').addEventListener('change',()=>{const f=DATA.films[activeDetailId],ix=$('watchEdition').value;if(!f||ix==='')return;const ed=f.editions[Number(ix)];const compatible=(f.cuts||[]).filter(c=>(ed.cutIds||[]).some(id=>String(id)===String(c.dbId))).map(c=>cutName(c.title,f.title));if(compatible.length===1)$('watchCut').value=compatible[0];});
 $('saveWatch').onclick=async()=>{
  const f=DATA.films[activeDetailId],date=$('watchDate').value;
  if(!f||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)||new Date(date+'T12:00:00').toString()==='Invalid Date'){$('watchMessage').textContent='Kies een geldige datum.';return;}
@@ -459,7 +459,7 @@ $('saveWatch').onclick=async()=>{
  const edIx=$('watchEdition').value,ed=edIx!==''?f.editions[Number(edIx)]:null;
  const filmId=window.__supabaseFilmIds?.[activeDetailId];
  if(!filmId){$('watchMessage').textContent='Geen Supabase-film-ID gevonden.';return;}
- const cut=$('watchCutWrap').hidden?(watchCuts(f)[0]||'Standaardversie'):$('watchCut').value;
+ const cut=$('watchCut').value||watchCuts(f)[0]||'Standaardversie';
  const btn=$('saveWatch');btn.disabled=true;$('watchMessage').textContent='Opslaan in Supabase…';
  try{
   const token=await adminAccessToken();
@@ -516,7 +516,25 @@ function renderLabels(){
 let activeLabel='';renderLabels();
 const oldRender=render;
 render=function(){oldRender();if(activeLabel){const matching=filmsForLabel(activeLabel);const allowed=new Set(matching.map(f=>DATA.films.indexOf(f)));let visible=0;document.querySelectorAll('#movies .movie').forEach(el=>{const ok=allowed.has(Number(el.dataset.id));el.style.display=ok?'':'none';if(ok)visible++});$('count').innerHTML=`${visible} films gevonden · ${esc(activeLabel)} <button id="clearLabel" class="back">✕ Wis labelfilter</button>`;$('clearLabel').onclick=()=>{activeLabel='';render()};}};
-async function choosePoster(f,id){const overlay=$('posterPicker');overlay.hidden=false;overlay.style.display='flex';$('posterChoices').innerHTML='';$('posterPickerStatus').textContent='Posters laden…';if(!tmdbKey){$('posterPickerStatus').textContent='Vul eerst je TMDB API-sleutel in.';return}try{let tmdbId=f._tmdbId;if(!tmdbId){const qs=new URLSearchParams({api_key:tmdbKey,query:f.title});if(f.year)qs.set('year',f.year);const r=await fetch('https://api.themoviedb.org/3/search/movie?'+qs);if(!r.ok)throw Error('Zoeken mislukt');const j=await r.json();tmdbId=j.results?.[0]?.id;}if(!tmdbId)throw Error('Film niet gevonden');const r=await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}/images?api_key=${encodeURIComponent(tmdbKey)}`);if(!r.ok)throw Error('Posters niet beschikbaar');const j=await r.json();const imgs=(j.posters||[]).slice(0,45);$('posterPickerStatus').textContent=imgs.length+' posters gevonden. Klik om te kiezen.';$('posterChoices').innerHTML=imgs.map((im,i)=>`<button data-pick="${i}" title="Kies poster"><img loading="lazy" src="https://image.tmdb.org/t/p/w342${esc(im.file_path)}" alt="Posteroptie ${i+1}"></button>`).join('');document.querySelectorAll('[data-pick]').forEach(btn=>btn.onclick=()=>{const path=imgs[Number(btn.dataset.pick)].file_path;const url='https://image.tmdb.org/t/p/w500'+path;posterCache[id]=url;try{localStorage.setItem('filmPosterCacheV4',JSON.stringify(posterCache))}catch(e){}document.querySelectorAll(`[data-poster-id="${id}"] img`).forEach(img=>img.src=url);overlay.hidden=true;overlay.style.display='none';});}catch(e){$('posterPickerStatus').textContent='Posters ophalen mislukt: '+e.message;}}
+async function choosePoster(f,id){
+ if(!adminSession){alert('Log in als beheerder om een poster te wijzigen.');return;}
+ const overlay=$('posterPicker');overlay.hidden=false;overlay.style.display='flex';$('posterChoices').innerHTML='';$('posterPickerStatus').textContent='Posters laden via TMDB…';
+ try{
+  if(!f._tmdbId)throw Error('Deze film heeft nog geen TMDB-ID.');
+  const response=await fetch(SUPABASE_URL+'/functions/v1/film-poster-options',{method:'POST',headers:{'apikey':SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:JSON.stringify({tmdb_id:f._tmdbId})});
+  const data=await response.json();if(!response.ok)throw Error(data.error||'Posters ophalen mislukt');
+  const imgs=data.posters||[];
+  $('posterPickerStatus').textContent=imgs.length?imgs.length+' posters gevonden. Kies een poster.':'Geen alternatieve posters gevonden.';
+  $('posterChoices').innerHTML=imgs.map((im,i)=>`<button type="button" data-pick="${i}" title="Kies poster"><img loading="lazy" src="https://image.tmdb.org/t/p/w342${esc(im.path)}" alt="Posteroptie ${i+1}"></button>`).join('');
+  $('posterChoices').querySelectorAll('[data-pick]').forEach(btn=>btn.onclick=async()=>{
+   const url='https://image.tmdb.org/t/p/w500'+imgs[Number(btn.dataset.pick)].path;
+   const filmId=window.__supabaseFilmIds?.[id];if(!filmId){$('posterPickerStatus').textContent='Geen film-ID gevonden.';return;}
+   btn.disabled=true;$('posterPickerStatus').textContent='Poster opslaan…';
+   try{await adminRest('films','PATCH',{poster_url:url},await adminAccessToken(),'?id=eq.'+encodeURIComponent(filmId));posterCache[id]=url;f.poster_url=url;document.querySelectorAll(`[data-poster-id="${id}"] img`).forEach(img=>img.src=url);overlay.hidden=true;overlay.style.display='none';}
+   catch(e){$('posterPickerStatus').textContent='Opslaan mislukt: '+e.message;btn.disabled=false;}
+  });
+ }catch(e){$('posterPickerStatus').textContent='Posters ophalen mislukt: '+e.message;}
+}
 $('closePosterPicker').onclick=()=>{$('posterPicker').hidden=true;$('posterPicker').style.display='none'};
 
 $('exportWatches').onclick=()=>{const rows=[['Titel','Datum','Formaat','Editie','Versie','Rating'],...extraWatches.map(x=>[x.title,x.date,x.format,x.edition,x.cut,x.rating])];const csv='\uFEFF'+rows.map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\r\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='filmcollectie_nieuwe_kijkbeurten.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
@@ -552,6 +570,7 @@ function spotifyTrackUri(raw){
  return m?'spotify:track:'+m[1]:null;
 }
 function configureSpotify(f){
+ if(!adminSession){alert('Alleen de beheerder kan het soundtracknummer wijzigen.');return false;}
  const key=spotifyFilmKey(f),old=spotifyMap()[key]||'';
  const entry=prompt('Plak de Spotify-link van het exacte soundtracknummer voor '+f.title+'.\n\nIn Spotify: rechtermuisknop op het nummer → Delen → Link naar nummer kopiëren.\n\nLaat leeg om een bestaande koppeling te wissen.',old?old.replace('spotify:track:','https://open.spotify.com/track/'):'');
  if(entry===null)return false;
@@ -793,7 +812,7 @@ function detail(f){
  <div class="film-languages"><div class="film-language"><span class="film-language-label">🌐 Gesproken taal</span><span class="film-language-value">${esc(f.language||'–')}</span></div><div class="film-language"><span class="film-language-label">💬 Ondertiteling</span><span class="film-language-value">${esc(f.subtitles||'–')}</span></div></div><div class="film-detail-sections"><section class="panel"><h3>💿 Mijn fysieke uitgaven (${f.editions.length})</h3>${editions||'<p class="muted">Geen uitgaven gevonden.</p>'}</section><section class="panel"><h3>🎞️ Versies / cuts</h3>${cuts.map(c=>`<div class="edition edition-with-count">${watchCountTag(Math.max(0,(watchCounts.cuts.get(cutName(c.title,f.title).toLocaleLowerCase('nl-NL'))||0)+Number(c.watchOffset||0)),discGroups(f).some(g=>g.name===cutName(c.title,f.title)&&g.seen))}${esc(displayFilmTitle(c.title))}${c.runtimes.length?' ('+c.runtimes.map(n=>n+' min').join(' / ')+')':''}</div>`).join('')}</section></div>
  <section class="panel film-director"><h3>🎥 Regisseur</h3><button class="director-card" id="directorCard"><span class="director-photo" id="directorPhoto" style="display:flex;align-items:center;justify-content:center">◈</span><span><strong>${esc(f.director||'Onbekend')}</strong><small>Bekijk films van deze regisseur →</small></span></button></section><section class="panel film-cast"><div class="film-cast-head"><h3 style="margin:0">🎭 Acteurs</h3><button class="cast-toggle" id="castToggle" style="display:none">Toon volledige cast</button></div><div class="cast-grid" id="castGrid"></div><p class="muted" id="castInfo" style="font-size:12px;margin-bottom:0"></p></section>`;
  document.querySelectorAll('[data-open-film-history]').forEach(el=>{el.addEventListener('click',()=>showFilmDiary(f));el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showFilmDiary(f)}})});
- const actions=document.querySelector('.detail-topbar .detail-actions');let trailerPanel=actions.querySelector('.trailer-panel');if(!trailerPanel){trailerPanel=document.createElement('section');trailerPanel.className='panel trailer-panel';trailerPanel.innerHTML='<h3>🎬 Trailer</h3><div class="trailer-box" id="trailerBox">Trailer wordt opgehaald via TMDB…</div>';actions.append(trailerPanel)}else{$('trailerBox').textContent='Trailer wordt opgehaald via TMDB…'}$('changeFilmPoster').addEventListener('click',()=>choosePoster(f,id));$('directorCard').onclick=()=>filterPerson(f.director,document.querySelector('#directorCard img')?.src||'');$('soundtrackButton').onclick=()=>openFilmSoundtrack(f);$('spotifyEditLink').onclick=()=>configureSpotify(f);show('detail');watchPosters();renderCast(f,id);loadPublicTrailer(f,id);
+ const actions=document.querySelector('.detail-topbar .detail-actions');let trailerPanel=actions.querySelector('.trailer-panel');if(!trailerPanel){trailerPanel=document.createElement('section');trailerPanel.className='panel trailer-panel';trailerPanel.innerHTML='<h3>🎬 Trailer</h3><div class="trailer-box" id="trailerBox">Trailer wordt opgehaald via TMDB…</div>';actions.append(trailerPanel)}else{$('trailerBox').textContent='Trailer wordt opgehaald via TMDB…'}$('changeFilmPoster').hidden=!adminSession;$('changeFilmPoster').style.display=adminSession?'':'none';$('changeFilmPoster').addEventListener('click',()=>choosePoster(f,id));$('directorCard').onclick=()=>filterPerson(f.director,document.querySelector('#directorCard img')?.src||'');$('soundtrackButton').onclick=()=>openFilmSoundtrack(f);$('spotifyEditLink').hidden=!adminSession;$('spotifyEditLink').style.display=adminSession?'':'none';$('spotifyEditLink').onclick=()=>{if(adminSession)configureSpotify(f)};show('detail');watchPosters();renderCast(f,id);loadPublicTrailer(f,id);
 }
 // Publieke trailers via de Supabase Edge Function; TMDB-secret blijft op de server.
 async function loadPublicTrailer(f,id){
@@ -999,6 +1018,7 @@ function setAdminUI(){
  document.getElementById('adminToggle').textContent=signedIn?'✓ Beheerder':'Beheerder inloggen';
  if(typeof updateDiary==='function')updateDiary();
  document.getElementById('addFilmButton').style.display=signedIn?'inline-block':'none';document.getElementById('syncFilmIdsButton').style.display=signedIn?'inline-block':'none';document.getElementById('imdbPreviewButton').style.display=signedIn?'inline-block':'none';document.getElementById('tmdbSelectedSaveButton').style.display=signedIn?'inline-block':'none';const saveImdb=document.getElementById('imdbSaveButton');saveImdb.style.display=signedIn&&imdbPreviewApproved?'inline-block':'none';if(!signedIn){imdbPreviewApproved=false;saveImdb.disabled=true;}if(!signedIn)document.getElementById('syncFilmIdsResult').hidden=true;for(const id of ['editFilmButton','deleteFilmButton'])document.getElementById(id).style.display=signedIn&&activeDetailId>=0?'inline-block':'none';
+ for(const id of ['changeFilmPoster','spotifyEditLink']){const el=document.getElementById(id);if(el){el.hidden=!signedIn;el.style.display=signedIn?'':'none';}}
  watchButton.disabled=!signedIn;watchButton.style.opacity=signedIn?'1':'.55';watchButton.style.cursor=signedIn?'pointer':'not-allowed';watchButton.title=signedIn?'Registreer een nieuwe kijkbeurt':'Log in als beheerder om een kijkbeurt toe te voegen';
 }
 // v60 — beheerderstest met overzichtelijk batchrapport.
