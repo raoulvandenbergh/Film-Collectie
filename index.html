@@ -940,48 +940,70 @@ function syncElement(tag,cls,txt){
 function showSyncReport(data){
  syncResult.replaceChildren();
  syncResult.classList.add('sync-report');
- syncResult.append(syncElement('h3','', 'Filmgegevens koppelen — resultaat'));
+ const preview=data.mode==='preview';
+ syncResult.append(syncElement('h3','',preview?'TMDB-kandidaten — veilige test':'Filmgegevens koppelen — resultaat'));
+ const results=Array.isArray(data.results)?data.results:[];
  const processed=Number(data.processed)||0;
  const linked=Number(data.linked)||0;
- const skipped=Number(data.skipped)||0;
+ const withCandidates=results.filter(x=>Array.isArray(x.candidates)&&x.candidates.length>0).length;
  const stats=syncElement('div','sync-stats');
- for(const [label,num] of [['Verwerkt',processed],['Gekoppeld',linked],['Overgeslagen / fouten',skipped]]){
-  const item=syncElement('div','sync-stat');
-  item.append(syncElement('strong','',num),syncElement('small','',label));
-  stats.append(item);
- }
+ const values=preview?[['Onderzocht',processed],['Met kandidaten',withCandidates],['Zonder kandidaten / fout',processed-withCandidates]]:[['Verwerkt',processed],['Gekoppeld',linked],['Overgeslagen / fouten',Number(data.skipped)||0]];
+ for(const [label,num] of values){const item=syncElement('div','sync-stat');item.append(syncElement('strong','',num),syncElement('small','',label));stats.append(item);}
  syncResult.append(stats);
+ if(preview){
+  syncResult.append(syncElement('p','sync-muted','Alleen een voorbeeldweergave. Er zijn geen databasegegevens gewijzigd. De scores zijn zoeksignalen, geen bevestigde matches.'));
+  const exportBtn=syncElement('button','export-watches','↓ Download kandidaten (CSV)');
+  exportBtn.type='button';exportBtn.style.margin='8px 0';
+  exportBtn.addEventListener('click',()=>{
+   const rows=[['film_id','eigen_titel','eigen_jaar','tmdb_id','tmdb_titel','originele_titel','tmdb_jaar','score','fout']];
+   for(const item of results){
+    if(item.candidates?.length){for(const c of item.candidates)rows.push([item.id,item.title,item.release_year,c.tmdb_id,c.title,c.original_title,c.year,c.score,'']);}
+    else rows.push([item.id,item.title,item.release_year,'','','','','',item.error||'Geen kandidaten']);
+   }
+   const csv='\uFEFF'+rows.map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
+   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);
+   const link=document.createElement('a');link.href=url;link.download='tmdb-kandidaten-test.csv';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  });
+  syncResult.append(exportBtn);
+  for(const item of results){
+   const details=syncElement('details','');
+   const count=Array.isArray(item.candidates)?item.candidates.length:0;
+   details.append(syncElement('summary','',(item.title||'Onbekende film')+' ('+(item.release_year||'?')+') — '+(item.error?'fout':count+' kandidaten')));
+   if(item.error)details.append(syncElement('p','sync-muted',item.error));
+   else if(count){const list=syncElement('ul','');for(const c of item.candidates){list.append(syncElement('li','',(c.title||'?')+' ('+(c.year||'?')+') — TMDB '+c.tmdb_id+' · score '+c.score+(c.original_title&&c.original_title!==c.title?' · origineel: '+c.original_title:'')));}details.append(list);}
+   else details.append(syncElement('p','sync-muted','Geen kandidaten gevonden.'));
+   syncResult.append(details);
+  }
+  if(!results.length)syncResult.append(syncElement('p','sync-muted','Geen films gevonden voor deze test.'));
+  return;
+ }
  const bar=syncElement('div','sync-progress');
  bar.setAttribute('role','progressbar');bar.setAttribute('aria-label','Succesvol gekoppeld in deze groep');
  bar.setAttribute('aria-valuemin','0');bar.setAttribute('aria-valuemax',String(processed));bar.setAttribute('aria-valuenow',String(linked));
  const fill=syncElement('div','sync-progress-fill');fill.style.width=(processed?Math.min(100,linked/processed*100):0)+'%';bar.append(fill);syncResult.append(bar);
  syncResult.append(syncElement('p','sync-muted','Voortgang van deze groep; niet van de volledige collectie.'));
- const results=Array.isArray(data.results)?data.results:[];
  for(const [heading,items] of [
   ['Gekoppelde films',results.filter(x=>x.status==='gekoppeld')],
   ['Overgeslagen films',results.filter(x=>x.status==='overgeslagen')],
   ['Fouten',results.filter(x=>x.status==='fout')]
  ]){
   if(!items.length)continue;
-  const details=syncElement('details','');
-  if(heading!=='Gekoppelde films')details.open=true;
+  const details=syncElement('details','');if(heading!=='Gekoppelde films')details.open=true;
   details.append(syncElement('summary','',heading+' ('+items.length+')'));
-  const list=syncElement('ul','');
-  for(const item of items){
+  const list=syncElement('ul','');for(const item of items){
    const suffix=item.status==='gekoppeld'?' — TMDB '+item.tmdb_id+', IMDb '+(item.imdb_id||'ontbreekt'):
     item.reason?' — '+item.reason:item.candidates!==undefined?' — '+item.candidates+' kandidaten':'';
    list.append(syncElement('li','',(item.title||'Onbekende film')+suffix));
-  }
-  details.append(list);syncResult.append(details);
+  }details.append(list);syncResult.append(details);
  }
  if(processed===0)syncResult.append(syncElement('p','sync-muted','Geen nieuwe films om te verwerken.'));
 }
 syncButton.addEventListener('click',async()=>{
  if(!adminSession){alert('Log eerst in als beheerder.');return;}
- if(!confirm('Een volgende groep films koppelen aan TMDB en IMDb? De server bepaalt het aantal (momenteel maximaal 25). Bestaande ratings worden niet gewijzigd.'))return;
- syncButton.disabled=true;syncButton.textContent='Bezig met koppelen…';
+ if(!confirm('De 51 overgeslagen films opnieuw doorzoeken in veilige testmodus? Er wordt niets opgeslagen.'))return;
+ syncButton.disabled=true;syncButton.textContent='TMDB doorzoeken…';
  syncResult.hidden=false;syncResult.classList.add('sync-report');
- syncResult.replaceChildren(syncElement('h3','', 'Filmgegevens koppelen'),syncElement('p','', 'Bezig met de volgende groep…'));
+ syncResult.replaceChildren(syncElement('h3','', 'Filmgegevens koppelen'),syncElement('p','', 'De 51 films worden onderzocht. Dit kan even duren…'));
  try{
   const token=await adminAccessToken();
   const response=await fetch(SUPABASE_URL+'/functions/v1/sync-film-ids',{
