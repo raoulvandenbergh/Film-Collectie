@@ -1389,7 +1389,7 @@ synchronizeCollection();
    const result=await response.json().catch(()=>({}));if(!response.ok)throw Error(result.error||'HTTP '+response.status);
    lookupInfo=result;
    const fill=(id,value)=>{if(value!==undefined&&value!==null&&value!=='')el(id).value=String(value)};
-   fill('newFilmTitle',result.title);fill('newFilmYear',result.year);fill('newFilmDirector',result.director);fill('newFilmGenres',result.genres);fill('newFilmRuntime',result.runtime);fill('newFilmLanguage',result.language);fill('newFilmCast',result.cast);
+   fill('newFilmTitle',result.title);fill('newFilmYear',result.year);fill('newFilmDirector',result.director);fill('newFilmGenres',result.genres);fill('newFilmRuntime',result.runtime);fill('newFilmLanguage',result.language);fill('newFilmCast',result.cast);fill('newFilmImdb',result.imdb_rating);
    const first=el('newFilmCuts').querySelector('.add-film-row');if(first){first.querySelector('.cut-title').value=val('newFilmTitle');first.querySelector('.cut-runtime').value=val('newFilmRuntime')};refreshEditionCuts();
    status.textContent='✓ Filmgegevens gevonden. Controleer de speelduur en vul de ondertiteling en uitgave in.';
   }catch(err){status.textContent='Automatisch ophalen is nog niet beschikbaar ('+err.message+'). Je kunt de film wel handmatig invullen en opslaan.';}finally{btn.disabled=false}
