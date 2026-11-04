@@ -740,6 +740,13 @@ function cutName(editionTitle,filmTitle){
  tail=tail.replace(/^[-–: ]+/,'').replace(/^\((.*)\)$/,'$1').trim();
  return tail||'Standaardversie';
 }
+function watchEditionDisplay(e){
+ const format=String(e.format||'').trim();
+ const edition=String(e.edition||'').trim();
+ const label=String(e.label||'').trim();
+ const pretty=v=>/^[^a-zà-ÿ]*[A-ZÀ-Ý][^a-zà-ÿ]*$/.test(v)&&/[A-ZÀ-Ý]{3,}/.test(v)?v.toLocaleLowerCase('nl-NL').replace(/(^|[\s/-])([a-zà-ÿ])/g,(_,sep,c)=>sep+c.toLocaleUpperCase('nl-NL')):v;
+ return [format,pretty(edition),pretty(label)].filter(Boolean).join(' · ');
+}
 function watchCuts(f){return f.cuts?.length?[...new Set(f.cuts.map(c=>cutName(c.title,f.title)))]:[...new Set(f.editions.map(e=>cutName(e.title,f.title)))];}
 $('markWatched').onclick=()=>{
  if(!adminSession){alert('Log eerst in als beheerder.');return;}
@@ -749,7 +756,7 @@ $('markWatched').onclick=()=>{
  $('watchCutWrap').hidden=false;
  $('watchCut').innerHTML='<option value="">Kies een cut…</option>'+cuts.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
  $('watchCut').value=showCuts?'':(cuts[0]||'Standaardversie');
- $('watchEdition').innerHTML='<option value="">Niet vanaf mijn eigen collectie (disc blijft ongezien)</option>'+f.editions.map((e,i)=>`<option value="${i}">${esc(e.format||'')} · ${esc(e.edition||'')} · ${esc(e.title||f.title)}</option>`).join('');
+ $('watchEdition').innerHTML='<option value="">Niet vanaf mijn eigen collectie (disc blijft ongezien)</option>'+f.editions.map((e,i)=>`<option value="${i}">${esc(watchEditionDisplay(e))}</option>`).join('');
  $('watchEdition').value=f.editions.length===1?'0':'';
  $('watchEditionWrap').hidden=f.editions.length===0;
  $('watchRating').innerHTML='<option value="">Geen beoordeling</option>'+Array.from({length:21},(_,i)=>{const n=(i/2).toFixed(1);return `<option value="${n}">${n.replace('.',',')} / 10</option>`}).join('');
@@ -1687,7 +1694,7 @@ function openEditWatch(id){
  const names=[...new Set([entry.cut,...(f?watchCuts(f):[])].filter(Boolean))];
  cuts.innerHTML='<option value="">Geen cut geselecteerd</option>'+names.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');cuts.value=entry.cut||'';
  const editions=document.getElementById('editWatchEdition');
- editions.innerHTML='<option value="">Geen fysieke uitgave geselecteerd</option>'+(f?f.editions.map((e,i)=>`<option value="${i}">${esc(e.format||'')} · ${esc(e.edition||'')} · ${esc(e.title||f.title)}</option>`).join(''):'');
+ editions.innerHTML='<option value="">Geen fysieke uitgave geselecteerd</option>'+(f?f.editions.map((e,i)=>`<option value="${i}">${esc(watchEditionDisplay(e))}</option>`).join(''):'');
  let ix=f?f.editions.findIndex(e=>entry._editionId!=null?String(e.dbId)===String(entry._editionId):(e.edition===entry.edition&&e.format===entry.format)):-1;
  editions.value=ix>=0?String(ix):'';
  document.getElementById('editWatchMessage').textContent='';
