@@ -2412,7 +2412,7 @@ synchronizeCollection();
   for(const [field,value] of Object.entries({newFilmTitle:f.title,newFilmYear:f.year,newFilmDirector:f.director,newFilmGenres:f.genres,newFilmRuntime:f.runtime,newFilmLanguage:f.language,newFilmSubtitles:f.subtitles,newFilmImdb:f.imdb,newFilmMyRating:f.rating,newFilmLetterboxd:f.letterboxd,newFilmCast:f.cast,newFilmPriorWatches:excelViewingTotal(f.title,f.year)??f._priorWatches??0}))el(field).value=value??'';
   el('newFilmCuts').innerHTML='';el('newFilmEditions').innerHTML='';
   const existingCuts=f.cuts?.length?f.cuts:f.editions.map(ed=>({title:ed.title||f.title,runtime:ed.runtime||f.runtime}));
-  for(const c of existingCuts){addCut(c.title,c.runtime);const row=el('newFilmCuts').lastElementChild;row.dataset.dbId=c.dbId||'';row.dataset.watchOffset=String(c.watchOffset||0);row.querySelector('.cut-watches').value=String(Math.max(0,(editionWatchCounts(f).cuts.get(cutName(c.title,f.title).toLocaleLowerCase('nl-NL'))||0)+(c.watchOffset||0)));}
+  for(const c of existingCuts){addCut(c.title,c.runtime);const row=el('newFilmCuts').lastElementChild;row.dataset.dbId=c.dbId||'';row.dataset.watchOffset=String(c.watchOffset||0);row.querySelector('.cut-watches').value=String(Math.max(0,(existingCuts.length===1 && f.editions.length===1) ? ((editionWatchCounts(f).editions.get(String(f.editions[0].dbId))||0)+Number(f.editions[0].watchOffset||0)) : ((editionWatchCounts(f).cuts.get(cutName(c.title,f.title).toLocaleLowerCase('nl-NL'))||0)+Number(c.watchOffset||0))));}
   if(!existingCuts.length)addCut(f.title,f.runtime);
   for(const ed of f.editions){addEdition(ed);const row=el('newFilmEditions').lastElementChild;const ids=ed.cutIds||[];for(const option of row.querySelector('.edition-cut').options)option.selected=false;for(let i=0;i<existingCuts.length;i++){const c=existingCuts[i];row.querySelector('.edition-cut').options[i].selected=ids.length?ids.some(x=>String(x)===String(c.dbId)):(c.title===ed.title&&String(c.runtime)===String(ed.runtime));}}
   if(!f.editions.length)addEdition();status.textContent='Je kunt filmgegevens en fysieke uitgaven wijzigen. Verwijder bestaande uitgaven alleen als er geen kijkbeurten aan gekoppeld zijn.';dlg.hidden=false;
@@ -2477,6 +2477,9 @@ synchronizeCollection();
   if(cuts.some(c=>!Number.isInteger(c.runtime)||c.runtime<1)){status.textContent='Vul voor iedere versie een geldige speelduur in.';return}
   const editions=[...el('newFilmEditions').querySelectorAll('.add-film-row')].map(r=>({format:r.querySelector('.edition-format').value,edition:r.querySelector('.edition-type').value.trim()||'Standaard',label:r.querySelector('.edition-label').value.trim(),cutIndices:[...r.querySelector('.edition-cut').selectedOptions].map(o=>Number(o.value)),manual:r.querySelector('.edition-watches').value}));
   if(!editions.length||editions.some(e=>!e.cutIndices.length)){status.textContent='Koppel aan iedere uitgave minimaal één cut.';return}
+  // Eén uitgave en één cut hebben altijd hetzelfde zichtbare aantal.
+  // De uitgave is hierbij leidend, zodat een oude cut-correctie niet terugkomt.
+  if(cuts.length===1 && editions.length===1 && editions[0].manual!=='')cuts[0].manual=editions[0].manual;
   const btn=el('saveNewFilm');btn.disabled=true;status.textContent='Film opslaan in Supabase…';
   let filmId=null;
   try{
