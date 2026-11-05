@@ -753,10 +753,34 @@ const RATING_KEY='filmarchive_rating_overrides_v1';let ratingOverrides={};try{co
 const filmRating=f=>ratingOverrides[f.title]!==undefined?ratingOverrides[f.title]:f.rating;
 const allHistory=()=>DATA.history.concat(extraWatches);
 const normTitle=t=>String(t||'').toLocaleLowerCase('nl-NL').trim().replace(/\s*\((?:black & white version|director['’]s cut|extended cut|theatrical cut|unrated cut|final cut|extended edition|redux cut|international cut|theatrical cut with alternative end|original uncut version|preview cut|the 1998 reconstruction)\)$/i,'').trim();
+// Eenduidige filmtitelherkenning, ook bij Letterboxd- en Excel-schrijfwijzen.
+// Alleen unieke treffers worden automatisch gekoppeld.
+function filmMatchKey(value){
+ let t=normTitle(value).normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
+   .replace(/&/g,' and ').replace(/[’‘]/g,"'").replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
+ t=t.replace(/^(the|a|an) /,'');
+ const sw=/^star wars(?: episode)?\s*(?:episode\s*)?(i|ii|iii|iv|v|vi|vii|viii|ix|[1-9])(?:\s|$)/.exec(t);
+ if(sw){const nums={i:1,ii:2,iii:3,iv:4,v:5,vi:6,vii:7,viii:8,ix:9};return 'star wars episode '+(nums[sw[1]]||sw[1]);}
+ const swTail=/^star wars (.+) (i|ii|iii|iv|v|vi|vii|viii|ix)$/.exec(t);
+ if(swTail){const nums={i:1,ii:2,iii:3,iv:4,v:5,vi:6,vii:7,viii:8,ix:9};return 'star wars episode '+nums[swTail[2]];}
+ return t;
+}
+function diaryFilmId(title,year){
+ const exact=String(title||'').toLocaleLowerCase('nl-NL').trim();
+ if(diaryFilmIndex.has(exact))return diaryFilmIndex.get(exact);
+ const key=filmMatchKey(title);
+ if(!key)return -1;
+ let candidates=[];
+ DATA.films.forEach((f,i)=>{
+  if(filmMatchKey(f.title)===key||(f.editions||[]).some(e=>filmMatchKey(e.title)===key))candidates.push(i);
+ });
+ if(candidates.length>1&&year)candidates=candidates.filter(i=>String(DATA.films[i].year)===String(year));
+ return candidates.length===1?candidates[0]:-1;
+}
 const filmHistory=f=>allHistory().filter(h=>{
  const id=DATA.films.indexOf(f);
  return (h._linkedFilmIndex!=null&&h._linkedFilmIndex===id)
-  ||(h._linkedFilmIndex==null&&(normTitle(h.title)===normTitle(f.title)||f.editions.some(e=>normTitle(h.title)===normTitle(e.title))));
+  ||(h._linkedFilmIndex==null&&diaryFilmId(h.title,h._year)===id);
 });
 const formatDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(d||'')?new Date(d+'T12:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'}):'';
 function displayFilmTitle(value){
@@ -777,14 +801,6 @@ function displayDiscFormat(value){
 }
 const diaryMonths=['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
 const diaryFilmIndex=new Map(DATA.films.map((f,i)=>[f.title.toLocaleLowerCase('nl-NL').trim(),i]));
-function diaryFilmId(title){
- const key=String(title||'').toLocaleLowerCase('nl-NL').trim();
- if(diaryFilmIndex.has(key))return diaryFilmIndex.get(key);
- const normalized=normTitle(title);
- const matches=DATA.films.map((f,i)=>({f,i})).filter(({f})=>
-  normTitle(f.title)===normalized||f.editions.some(e=>normTitle(e.title)===normalized));
- return matches.length===1?matches[0].i:-1;
-}
 function diaryPoster(title,linkedId=null){const id=linkedId??diaryFilmId(title);if(id<0)return '<div class="diary-poster diary-poster-empty">🎞</div>';const url=posterCache[id];return `<div class="diary-poster" data-poster-id="${id}" style="--a:${color(title)}"><span>${esc(displayFilmTitle(title))}</span>${url?`<img loading="lazy" src="${esc(url)}" alt="" onerror="this.remove()">`:''}</div>`;}
 function diaryFilm(title){const id=diaryFilmId(title);return id>=0?DATA.films[id]:null;}
 function displayEdition(value){
@@ -813,8 +829,8 @@ const watchedBefore2021=[
 ];
 function renderPre2021Diary(){
  const filtered=watchedBefore2021.map(([title,year])=>{
-  const film=DATA.films.find(f=>normTitle(f.title)===normTitle(title)&&Number(f.year)===year)
-   ||DATA.films.find(f=>normTitle(f.title)===normTitle(title));
+  const filmId=diaryFilmId(title,year);
+  const film=filmId>=0?DATA.films[filmId]:null;
   return {title,year,film};
  }).filter(x=>diaryFilterFilmId===null || (x.film&&DATA.films.indexOf(x.film)===diaryFilterFilmId));
  const host=$('diaryPre2021');
@@ -839,14 +855,14 @@ function updateDiary(){
  // (totaal ooit gezien - aantal geregistreerde kijkbeurten).
  const registeredCounts=new Map();
  for(const {entry} of chronological){
-   const id=entry._linkedFilmIndex??diaryFilmId(entry.title);
+   const id=entry._linkedFilmIndex??diaryFilmId(entry.title,entry._year);
    const key=id>=0?'film:'+id:'title:'+normTitle(entry.title);
    registeredCounts.set(key,(registeredCounts.get(key)||0)+1);
  }
  const seenCounts=new Map();
  const ordinalByIndex=new Map();
  for(const {entry,index} of chronological){
-   const id=entry._linkedFilmIndex??diaryFilmId(entry.title);
+   const id=entry._linkedFilmIndex??diaryFilmId(entry.title,entry._year);
    const key=id>=0?'film:'+id:'title:'+normTitle(entry.title);
    if(!seenCounts.has(key)){
      const excelTotal=id>=0?Number(DATA.films[id]?.watches)||0:0;
@@ -867,7 +883,7 @@ function updateDiary(){
   return b._sourceIndex-a._sourceIndex;
  };
  const rows=allHistory().map((entry,index)=>({...entry,_viewOrdinal:ordinalByIndex.get(index),_sourceIndex:index})).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||watchTieOrder(a,b));
- const visibleRows=diaryFilterFilmId===null?rows:rows.filter(x=>(x._linkedFilmIndex??diaryFilmId(x.title))===diaryFilterFilmId || (DATA.films[diaryFilterFilmId] && filmHistory(DATA.films[diaryFilterFilmId]).some(h=>h===x)));
+ const visibleRows=diaryFilterFilmId===null?rows:rows.filter(x=>(x._linkedFilmIndex??diaryFilmId(x.title,x._year))===diaryFilterFilmId || (DATA.films[diaryFilterFilmId] && filmHistory(DATA.films[diaryFilterFilmId]).some(h=>h===x)));
  const banner=$('diaryFilterBanner');
  $('diaryBackFilm').hidden=(diaryFilterFilmId===null);
  if(diaryFilterFilmId!==null){const f=DATA.films[diaryFilterFilmId];banner.hidden=false;banner.innerHTML=`<span>🎬 Alleen kijkbeurten van <strong>${esc(displayFilmTitle(f.title))}</strong> (${visibleRows.length} geregistreerd)</span><button id="clearDiaryFilter">Toon alle films</button>`;$('clearDiaryFilter').onclick=()=>{diaryFilterFilmId=null;$('diaryBackFilm').hidden=true;updateDiary()};}else{banner.hidden=true;banner.innerHTML='';}
@@ -878,7 +894,7 @@ function updateDiary(){
   const isNew=month!==lastMonth;lastMonth=month;
   const monthText=match?diaryMonths[Number(match[2])-1]||'':month;
   const calendar=isNew?`<div class="diary-month"><strong>${esc(monthText)}</strong><span>${esc(match?match[1]:'')}</span></div>`:'';
-  const film=x._linkedFilmIndex!=null?DATA.films[x._linkedFilmIndex]:diaryFilm(x.title);
+  const film=x._linkedFilmIndex!=null?DATA.films[x._linkedFilmIndex]:(diaryFilmId(x.title,x._year)>=0?DATA.films[diaryFilmId(x.title,x._year)]:null);
   const year=(film?.year||x._year)?`<span class="diary-film-year">(${esc(film?.year||x._year)})</span>`:'';
   return `<tr class="${isNew?'month-start':''}"><td class="diary-month-cell">${calendar}</td><td class="diary-day">${esc(match?String(Number(match[3])):date)}</td><td class="diary-poster-cell">${diaryPoster(x.title,x._linkedFilmIndex)}</td><td class="diary-film">${film?`<button class="diary-film-link" data-film-id="${DATA.films.indexOf(film)}" title="Open filmpagina">${esc(displayFilmTitle(x.title))}${year}</button>`:`${esc(displayFilmTitle(x.title))}${year}`}</td><td class="diary-rating">${esc(String(x.rating??"").trim()!=="" ? String(x.rating) : (film ? (String(filmRating(film)??"").trim() || "—") : "—"))}</td><td class="diary-view-count">${esc(diaryViewingLabel(x._viewOrdinal))}</td><td class="diary-format">${esc(displayDiscFormat(x.format||''))}</td><td class="diary-edition">${esc(displayEdition(x.edition))}${x.cut&&x.cut.toLocaleLowerCase('nl-NL')!==String(x.edition||'').toLocaleLowerCase('nl-NL')?' · '+esc(displayEdition(x.cut)):''}<button type="button" class="ticket-open" data-ticket-index="${x._sourceIndex}" title="Bekijk bioscoopkaartje" aria-label="Bekijk bioscoopkaartje">▤ Ticket</button>${window.__filmAdminSignedIn===true&&x._dbId!=null?`<button type="button" class="diary-edit-button" data-watch-edit="${esc(String(x._dbId))}" title="Bewerk kijkbeurt" aria-label="Bewerk kijkbeurt">✎</button>`:''}</td></tr>`;
  }).join('');
@@ -887,6 +903,11 @@ function updateDiary(){
  document.querySelectorAll('[data-watch-edit]').forEach(el=>el.addEventListener('click',()=>openEditWatch(el.dataset.watchEdit)));
  document.querySelectorAll('.diary-film-link').forEach(el=>el.addEventListener('click',()=>detail(DATA.films[Number(el.dataset.filmId)])));
  renderPre2021Diary();
+ const unlinked=visibleRows.filter(x=>(x._linkedFilmIndex??diaryFilmId(x.title,x._year))<0);
+ let diag=$('diaryUnlinkedCheck');
+ if(!diag){diag=document.createElement('details');diag.id='diaryUnlinkedCheck';diag.className='panel';$('diaryPre2021').after(diag);}
+ diag.hidden=!unlinked.length;
+ diag.innerHTML=unlinked.length?`<summary>⚠ ${unlinked.length} kijkbeurt(en) nog niet gekoppeld — controleer de filmtitels</summary><p class="muted">Alleen zekere overeenkomsten worden automatisch gekoppeld. Deze regels zijn niet aan een willekeurige film toegewezen.</p><ul>${[...new Set(unlinked.map(x=>x.title))].sort().map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:'';
  if(typeof watchPosters==='function'&&tmdbKey)watchPosters();
 }
 
@@ -1361,17 +1382,19 @@ function editionWatchCounts(f){
  // Kijkbeurten zonder specifieke disc/cut worden alleen aan een uitgave
  // toegewezen als er precies één mogelijke uitgave bestaat.
  const assigned=Array.from(result.values()).reduce((a,b)=>a+b,0);
- const unassigned=Math.max(0,entries.length-assigned);
- if(unassigned&&f.editions.length===1){
-  const key=String(f.editions[0].dbId);
-  result.set(key,(result.get(key)||0)+unassigned);
+ const knownTotal=Math.max(entries.length,Number(f.watches)||0,assigned);
+ const unassigned=Math.max(0,knownTotal-assigned);
+ // Bij precies één uitgave/versie kan het volledige filmtotaal veilig getoond worden.
+ if(f.editions.length===1){
+  const e=f.editions[0],key=String(e.dbId);
+  result.set(key,Math.max(knownTotal,(result.get(key)||0)+Number(e.watchOffset||0)));
  }
- // Een film met één versie heeft geen cut-onzekerheid.
  if(cuts.size===1){
   const key=cuts.keys().next().value;
-  cuts.set(key,Math.max(cuts.get(key)||0,entries.length));
+  const cut=(f.cuts||[]).find(c=>cutName(c.title,f.title).toLocaleLowerCase('nl-NL')===key);
+  cuts.set(key,Math.max(knownTotal,(cuts.get(key)||0)+Number(cut?.watchOffset||0)));
  }
- return {editions:result,cuts,unassigned: f.editions.length===1?0:unassigned,total:entries.length};
+ return {editions:result,cuts,unassigned:f.editions.length===1?0:unassigned,total:knownTotal,completeSingleEdition:f.editions.length===1,completeSingleCut:cuts.size===1};
 }
 function watchCountTag(n,seen){return `<span class="edition-watch-count" title="Aantal aan een eigen uitgave gekoppelde geregistreerde kijkbeurten">${n>0?'gezien '+n+'x':seen?'gezien · aantal onbekend':'gezien 0x'}</span>`;}
 // Historische Letterboxd-notitie: vóór 2021 gezien, zonder bekende datum of disc/cut.
@@ -1380,7 +1403,7 @@ function watchCountTag(n,seen){return `<span class="edition-watch-count" title="
 function isWatchedBefore2021(f){
  // Letterboxd en collectie kunnen verschillende releasejaren hebben.
  // Match op dezelfde titel als de kalenderweergave, met cut-normalisatie.
- return watchedBefore2021.some(([title])=>normTitle(f.title)===normTitle(title));
+ return watchedBefore2021.some(([title])=>filmMatchKey(f.title)===filmMatchKey(title));
 }
 function historicalWatchCount(f,n){return isWatchedBefore2021(f)?Math.max(1,n):n;}
 function detail(f){
@@ -1392,10 +1415,10 @@ function detail(f){
  const editionMinutes=e=>{const n=Number(e.runtime);return Number.isFinite(n)&&n>0?Math.round(n):null};
  const runtimes=[...new Set(f.editions.map(editionMinutes).filter(n=>n!==null))].sort((a,b)=>a-b);
  const runtimeText=runtimes.length?runtimes.map(n=>n+' min').join(' / '):(f.runtime?esc(f.runtime)+' min':'–');
- const editions=f.editions.map(e=>`<div class="edition edition-with-count">${watchCountTag(historicalWatchCount(f,Math.max(0,(watchCounts.editions.get(String(e.dbId))||0)+Number(e.watchOffset||0))),Boolean(e.discSeen||e.disc_seen||e.disc_seen===true))}<b>${esc(e.format||'–')}</b> · ${esc(e.edition||'Standaard')}<br><span class="muted">${esc(e.label||'')}${e.title&&e.title.toLowerCase()!==f.title.toLowerCase()?' · '+esc(e.title):''}</span></div>`).join('');
+ const editions=f.editions.map(e=>`<div class="edition edition-with-count">${watchCountTag(historicalWatchCount(f,Math.max(0,(watchCounts.editions.get(String(e.dbId))||0)+(watchCounts.completeSingleEdition?0:Number(e.watchOffset||0)))),Boolean(e.discSeen||e.disc_seen||e.disc_seen===true))}<b>${esc(e.format||'–')}</b> · ${esc(e.edition||'Standaard')}<br><span class="muted">${esc(e.label||'')}${e.title&&e.title.toLowerCase()!==f.title.toLowerCase()?' · '+esc(e.title):''}</span></div>`).join('');
  const cuts=(f.cuts?.length?f.cuts.map(c=>({title:c.title,runtimes:[Number(c.runtime)].filter(n=>n>0),watchOffset:c.watchOffset})): [...new Map(f.editions.map(e=>[e.title||f.title,e.title||f.title])).values()].map(title=>({title,runtimes:[...new Set(f.editions.filter(e=>(e.title||f.title)===title).map(editionMinutes).filter(n=>n!==null))].sort((a,b)=>a-b),watchOffset:0})));
  $('detailBody').innerHTML=`<div class="film-detail-grid"><div class="detail-poster-column">${poster(f)}<button class="detail-poster-change" id="changeFilmPoster" type="button">Andere poster kiezen</button></div><div class="details"><div class="film-kicker">FILMDETAILS / FILM COLLECTIE</div><h2>${esc(displayFilmTitle(f.title))} <span class="film-year">(${esc(f.year||'–')})</span></h2><div class="meta">${runtimeText}<br>${esc(f.director||'–')}<br>${esc(f.genres||'–')}</div><div class="film-facts"><div class="film-fact ${(f.seen||watched.length)?'is-seen':''}"><span class="fact-label">Status</span><span>${(f.seen||watched.length)?'✓ Gezien':'Nog niet gezien'}</span></div><div class="film-fact history-link" role="button" tabindex="0" data-open-film-history="1" title="Bekijk alle kijkbeurten"><span class="fact-label">Aantal keer bekeken</span><span>${esc(String(num(f.watches)+extraWatches.filter(h=>normTitle(h.title)===normTitle(f.title)).length))}×</span></div><div class="film-fact history-link" role="button" tabindex="0" data-open-film-history="1" title="Bekijk de kijkgeschiedenis"><span class="fact-label">Laatst bekeken</span><span class="fact-date">${lastSeen?esc(lastSeen):'Niet beschikbaar in export'}</span></div></div><div class="film-rating-row"><div class="stat"><strong>${esc(filmRating(f)||'–')} <span aria-hidden="true" style="color:#d9ed80;font-size:.6em">★</span></strong><span>Mijn rating</span></div><a data-external="imdb" class="stat rating-link" href="${imdbFilmUrl(f)}" target="_blank" rel="noopener noreferrer" title="Zoek deze film op IMDb"><strong>${Number.isFinite(Number(f.imdb)) && String(f.imdb).trim()!=='' ? Number(f.imdb).toLocaleString('nl-NL',{minimumFractionDigits:1,maximumFractionDigits:1}) : '–'}</strong><span class="rating-logo imdb">IMDb ↗</span></a><a data-external="letterboxd" class="stat rating-link" href="${letterboxdFilmUrl(f)}" target="_blank" rel="noopener noreferrer" title="Zoek deze film op Letterboxd"><strong>${formatOneDecimal(f.letterboxd)}</strong><span class="rating-logo lb"><span style="color:#ff8000">●</span><span style="color:#00e054">●</span><span style="color:#40bcf4">●</span> Letterboxd ↗</span></a></div></div></div>
- <div class="film-languages"><div class="film-language"><span class="film-language-label">🌐 Gesproken taal</span><span class="film-language-value">${esc(f.language||'–')}</span></div><div class="film-language"><span class="film-language-label">💬 Ondertiteling</span><span class="film-language-value">${esc(f.subtitles||'–')}</span></div></div><div class="film-detail-sections"><section class="panel"><h3>💿 Mijn fysieke uitgaven (${f.editions.length})</h3>${watchCounts.unassigned?`<p class="muted">${watchCounts.total} geregistreerde kijkbeurten; ${watchCounts.unassigned} zonder bekende uitgave. Deze zijn niet aan een willekeurige disc toegekend.</p>`:''}${editions||'<p class="muted">Geen uitgaven gevonden.</p>'}</section><section class="panel"><h3>🎞️ Versies / cuts</h3>${cuts.map(c=>`<div class="edition edition-with-count">${watchCountTag(historicalWatchCount(f,Math.max(0,(watchCounts.cuts.get(cutName(c.title,f.title).toLocaleLowerCase('nl-NL'))||0)+Number(c.watchOffset||0))),discGroups(f).some(g=>g.name===cutName(c.title,f.title)&&g.seen))}${esc(displayFilmTitle(c.title))}${c.runtimes.length?' ('+c.runtimes.map(n=>n+' min').join(' / ')+')':''}</div>`).join('')}</section></div>
+ <div class="film-languages"><div class="film-language"><span class="film-language-label">🌐 Gesproken taal</span><span class="film-language-value">${esc(f.language||'–')}</span></div><div class="film-language"><span class="film-language-label">💬 Ondertiteling</span><span class="film-language-value">${esc(f.subtitles||'–')}</span></div></div><div class="film-detail-sections"><section class="panel"><h3>💿 Mijn fysieke uitgaven (${f.editions.length})</h3>${watchCounts.unassigned?`<p class="muted">${watchCounts.total} keer bekeken volgens de collectie en kijkgeschiedenis; ${watchCounts.unassigned} niet aan een specifieke uitgave toe te wijzen. Deze zijn niet aan een willekeurige disc toegekend.</p>`:''}${editions||'<p class="muted">Geen uitgaven gevonden.</p>'}</section><section class="panel"><h3>🎞️ Versies / cuts</h3>${cuts.map(c=>`<div class="edition edition-with-count">${watchCountTag(historicalWatchCount(f,Math.max(0,(watchCounts.cuts.get(cutName(c.title,f.title).toLocaleLowerCase('nl-NL'))||0)+(watchCounts.completeSingleCut?0:Number(c.watchOffset||0)))),discGroups(f).some(g=>g.name===cutName(c.title,f.title)&&g.seen))}${esc(displayFilmTitle(c.title))}${c.runtimes.length?' ('+c.runtimes.map(n=>n+' min').join(' / ')+')':''}</div>`).join('')}</section></div>
  <section class="panel film-director"><h3>🎥 Regisseur</h3><button class="director-card" id="directorCard"><span class="director-photo" id="directorPhoto" style="display:flex;align-items:center;justify-content:center">◈</span><span><strong>${esc(f.director||'Onbekend')}</strong><small>Bekijk films van deze regisseur →</small></span></button></section><section class="panel film-cast"><div class="film-cast-head"><h3 style="margin:0">🎭 Acteurs</h3><button class="cast-toggle" id="castToggle" style="display:none">Toon volledige cast</button></div><div class="cast-grid" id="castGrid"></div><p class="muted" id="castInfo" style="font-size:12px;margin-bottom:0"></p></section><section class="panel country-panel"><h3>🌍 Landen van herkomst</h3><div class="country-chips" id="filmCountryChips"><span class="country-hint">Productielanden ophalen…</span></div></section>`;
  document.querySelectorAll('[data-open-film-history]').forEach(el=>{el.addEventListener('click',()=>showFilmDiary(f));el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showFilmDiary(f)}})});
  const actions=document.querySelector('.detail-topbar .detail-actions');let trailerPanel=document.querySelector('#detail .trailer-panel');if(!trailerPanel){trailerPanel=document.createElement('section');trailerPanel.className='panel trailer-panel';trailerPanel.innerHTML='<h3>🎬 Trailer</h3><div class="trailer-box" id="trailerBox">Trailer wordt opgehaald via TMDB…</div>';actions.append(trailerPanel)}else{$('trailerBox').textContent='Trailer wordt opgehaald via TMDB…'}syncIPadTrailerPlacement();$('changeFilmPoster').hidden=!adminSession;$('changeFilmPoster').style.display=adminSession?'':'none';$('changeFilmPoster').addEventListener('click',()=>choosePoster(f,id));$('directorCard').onclick=()=>filterPerson(f.director,document.querySelector('#directorCard img')?.src||'');$('soundtrackButton').onclick=()=>openFilmSoundtrack(f);$('spotifyEditLink').hidden=!adminSession;$('spotifyEditLink').style.display=adminSession?'':'none';$('spotifyEditLink').onclick=()=>{if(adminSession)configureSpotify(f)};show('detail');watchPosters();renderCast(f,id);renderFilmCountries(f,id);loadPublicTrailer(f,id);
@@ -1852,7 +1875,8 @@ async function synchronizeDiary(indicator,filmCount,editionCount){
    if(canonical){
     for(const alias of [r.film_title,r.source_title])if(alias)diaryFilmIndex.set(String(alias).trim().toLocaleLowerCase('nl-NL'),index);
    }
-   return {title,_linkedFilmIndex:index??null,date:r.watched_on||'',format:r.watched_format||'',edition:r.watched_edition||'',cut:r.watched_cut||'',rating:r.rating??'',_year:r.film_year??'',_dbId:r.id,_editionId:r.edition_id??null,_createdAt:r.created_at||r.inserted_at||''};
+   const resolvedIndex=index??diaryFilmId(title,r.film_year);
+   return {title,_linkedFilmIndex:resolvedIndex>=0?resolvedIndex:null,date:r.watched_on||'',format:r.watched_format||'',edition:r.watched_edition||'',cut:r.watched_cut||'',rating:r.rating??'',_year:r.film_year??'',_dbId:r.id,_editionId:r.edition_id??null,_createdAt:r.created_at||r.inserted_at||''};
   });
   DATA.history=converted;
   // v57: films.my_rating is the authoritative current personal rating.
