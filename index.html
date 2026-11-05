@@ -238,6 +238,12 @@ header small{letter-spacing:.4px}
 .detail-actions .watched-button{order:2}
 @media(max-width:600px){.detail-actions{justify-content:flex-start}.detail-actions .spotify-edit{font-size:10px}}
 .clear-filters{background:#253248;color:#d9ed80;border:1px solid #52677b;border-radius:8px;padding:11px 14px;cursor:pointer;font-weight:700}.clear-filters:hover{border-color:#d9ed80;background:#31445c}.diary-pre2021{margin-top:32px}.diary-pre2021-heading{font-family:Georgia,serif;color:var(--cinema-gold);font-size:22px;margin:0 0 13px}.diary-pre2021-heading span{font:13px system-ui,sans-serif;color:#b7c4be;margin-left:10px}.diary-pre2021 .diary-view-count{color:var(--cinema-gold)}
+
+/* Film37: compacte, rustige regisseurskaart. */
+#detail .director-card{width:33.333%;max-width:460px;min-width:310px;background:linear-gradient(125deg,#1d2923,#18271f);border:1px solid #5c5740;color:#f0eee6;box-shadow:none}
+#detail .director-card small{color:#d1ad76}
+#detail .director-card:hover{border-color:#a48b5c;background:linear-gradient(125deg,#26352b,#1b2a22)}
+@media(max-width:720px){#detail .director-card{width:100%;min-width:0;max-width:460px}}
 </style><style>.admin-toggle{background:transparent;color:#d9ed80;border:1px solid #647b69;border-radius:9px;padding:9px 13px;cursor:pointer}.admin-dialog[hidden],#adminSignedIn[hidden],#adminSignedOut[hidden]{display:none!important}.admin-dialog{position:fixed;inset:0;z-index:10000;background:#000b;display:grid;place-items:center;padding:20px}.admin-card{position:relative;width:min(420px,100%);padding:28px;background:#172235;color:#f2f5f9;border:1px solid #52677b;border-radius:16px;box-shadow:0 24px 70px #0009}.admin-card h2{margin:0 0 8px}.admin-card label{display:block;margin-top:16px;margin-bottom:6px}.admin-card input{display:block;width:100%;box-sizing:border-box;padding:12px;border:1px solid #52677b;border-radius:8px;background:#0c1524;color:white}.admin-card button[type=submit],#adminLogout{margin-top:20px;background:#d9ed80;color:#101722;border:0;border-radius:8px;padding:12px 18px;cursor:pointer;font-weight:700}.admin-close{position:absolute;top:12px;right:12px;border:0;background:transparent;color:white;cursor:pointer;font-size:20px}#adminStatus{min-height:20px;font-size:13px;color:#f0c8a5}</style><style>/* v42 — beheerder: kijkbeurten aanpassen */
 .diary-edit-cell{width:45px;text-align:center!important}.diary-edit-button{border:1px solid #46566a;background:#223044;color:#d9ed80;border-radius:7px;padding:7px 9px;cursor:pointer;font-size:15px}.diary-edit-button:hover{border-color:#d9ed80;background:#30435a}
 #editWatchDialog[hidden]{display:none!important}#editWatchDialog .watch-card{max-height:92vh;overflow-y:auto}#editWatchDialog .watch-actions{justify-content:space-between;flex-wrap:wrap}#editWatchDialog .delete-watch{border-color:#8b454d;color:#ffb9b9;background:#40232c}#editWatchMessage{min-height:18px}
@@ -871,6 +877,27 @@ function displayEdition(value){
    .replace(/\bA24\b/gi,'A24').replace(/\bBfi\b/gi,'BFI')
    .replace(/\bHmv\b/gi,'HMV');
 }
+// Film38: compacte editieomschrijving met het label van de gekoppelde fysieke uitgave.
+function diaryEditionDescription(x,film){
+ const edition=String(x.edition||'').trim();
+ const cut=String(x.cut||'').trim();
+ const isDefaultCut=/^(standaardversie|standaard versie|standard version|theatrical cut|theatrical version)$/i.test(cut);
+ const parts=[];
+ if(edition)parts.push(displayEdition(edition));
+ if(cut&&!isDefaultCut&&cut.toLocaleLowerCase('nl-NL')!==edition.toLocaleLowerCase('nl-NL'))parts.push(displayEdition(cut));
+ let physical=null;
+ if(film&&Array.isArray(film.editions)){
+  if(x._editionId!=null)physical=film.editions.find(e=>String(e.dbId)===String(x._editionId))||null;
+  if(!physical&&edition){
+   const norm=v=>String(v||'').trim().toLocaleLowerCase('nl-NL');
+   const matches=film.editions.filter(e=>norm(e.edition)===norm(edition)&&(!x.format||norm(e.format)===norm(x.format)));
+   if(matches.length===1)physical=matches[0];
+  }
+ }
+ const label=String(physical?.label||'').trim();
+ if(label&&!parts.some(part=>part.toLocaleLowerCase('nl-NL').includes(label.toLocaleLowerCase('nl-NL'))))parts.push(label);
+ return parts.join(' · ')||'—';
+}
 function diaryViewingLabel(n){
  if(!n)return '—';
  return n+'x';
@@ -954,7 +981,7 @@ function updateDiary(){
   const calendar=isNew?`<div class="diary-month"><strong>${esc(monthText)}</strong><span>${esc(match?match[1]:'')}</span></div>`:'';
   const film=x._linkedFilmIndex!=null?DATA.films[x._linkedFilmIndex]:(diaryFilmId(x.title,x._year)>=0?DATA.films[diaryFilmId(x.title,x._year)]:null);
   const year=(film?.year||x._year)?`<span class="diary-film-year">(${esc(film?.year||x._year)})</span>`:'';
-  return `<tr class="${isNew?'month-start':''}"><td class="diary-month-cell">${calendar}</td><td class="diary-day">${esc(match?String(Number(match[3])):date)}</td><td class="diary-poster-cell">${diaryPoster(x.title,x._linkedFilmIndex)}</td><td class="diary-film">${film?`<button class="diary-film-link" data-film-id="${DATA.films.indexOf(film)}" title="Open filmpagina">${esc(displayFilmTitle(x.title))}${year}</button>`:`${esc(displayFilmTitle(x.title))}${year}`}</td><td class="diary-rating">${esc(String(x.rating??"").trim()!=="" ? String(x.rating) : (film ? (String(filmRating(film)??"").trim() || "—") : "—"))}</td><td class="diary-view-count">${esc(diaryViewingLabel(x._viewOrdinal))}</td><td class="diary-format">${esc(displayDiscFormat(x.format||''))}</td><td class="diary-edition">${esc(displayEdition(x.edition))}${x.cut&&x.cut.toLocaleLowerCase('nl-NL')!==String(x.edition||'').toLocaleLowerCase('nl-NL')?' · '+esc(displayEdition(x.cut)):''}<button type="button" class="ticket-open" data-ticket-index="${x._sourceIndex}" title="Bekijk bioscoopkaartje" aria-label="Bekijk bioscoopkaartje">▤ Ticket</button>${window.__filmAdminSignedIn===true&&x._dbId!=null?`<button type="button" class="diary-edit-button" data-watch-edit="${esc(String(x._dbId))}" title="Bewerk kijkbeurt" aria-label="Bewerk kijkbeurt">✎</button>`:''}</td></tr>`;
+  return `<tr class="${isNew?'month-start':''}"><td class="diary-month-cell">${calendar}</td><td class="diary-day">${esc(match?String(Number(match[3])):date)}</td><td class="diary-poster-cell">${diaryPoster(x.title,x._linkedFilmIndex)}</td><td class="diary-film">${film?`<button class="diary-film-link" data-film-id="${DATA.films.indexOf(film)}" title="Open filmpagina">${esc(displayFilmTitle(x.title))}${year}</button>`:`${esc(displayFilmTitle(x.title))}${year}`}</td><td class="diary-rating">${esc(String(x.rating??"").trim()!=="" ? String(x.rating) : (film ? (String(filmRating(film)??"").trim() || "—") : "—"))}</td><td class="diary-view-count">${esc(diaryViewingLabel(x._viewOrdinal))}</td><td class="diary-format">${esc(displayDiscFormat(x.format||''))}</td><td class="diary-edition">${esc(diaryEditionDescription(x,film))}<button type="button" class="ticket-open" data-ticket-index="${x._sourceIndex}" title="Bekijk bioscoopkaartje" aria-label="Bekijk bioscoopkaartje">▤ Ticket</button>${window.__filmAdminSignedIn===true&&x._dbId!=null?`<button type="button" class="diary-edit-button" data-watch-edit="${esc(String(x._dbId))}" title="Bewerk kijkbeurt" aria-label="Bewerk kijkbeurt">✎</button>`:''}</td></tr>`;
  }).join('');
 
  document.querySelectorAll('[data-ticket-index]').forEach(el=>el.addEventListener('click',()=>openCinemaTicket(Number(el.dataset.ticketIndex))));
@@ -1464,6 +1491,19 @@ function isWatchedBefore2021(f){
  return watchedBefore2021.some(([title])=>filmMatchKey(f.title)===filmMatchKey(title));
 }
 function historicalWatchCount(f,n){return isWatchedBefore2021(f)?Math.max(1,n):n;}
+// Film37: presentatiehoofdletters; originele Supabase-waarden blijven intact.
+function displayFieldCapitalization(value){
+ return String(value??'').split(/(\s*[|,;\/]\s*)/).map(part=>{
+  if(!part || /^[\s|,;\/]+$/.test(part))return part;
+  return part.replace(/^(\s*)(.*?)(\s*)$/s,(_,before,word,after)=>{
+   if(!word || !/[\p{L}]/u.test(word))return part;
+   // Bestaande eigennamen, afkortingen en gemengde hoofdletters behouden.
+   if(word!==word.toUpperCase() && word!==word.toLowerCase())return part;
+   if(/^(?:[A-Z]\.){2,}$/i.test(word))return part;
+   return before+word.charAt(0).toLocaleUpperCase('nl-NL')+word.slice(1).toLocaleLowerCase('nl-NL')+after;
+  });
+ }).join('');
+}
 function detail(f){
  const id=DATA.films.indexOf(f);activeDetailId=id;for(const key of ['editFilmButton','deleteFilmButton']){const b=document.getElementById(key);if(b)b.style.display=window.__filmAdminSignedIn?'inline-block':'none';}
  const watched=filmHistory(f);
@@ -1473,10 +1513,10 @@ function detail(f){
  const editionMinutes=e=>{const n=Number(e.runtime);return Number.isFinite(n)&&n>0?Math.round(n):null};
  const runtimes=[...new Set(f.editions.map(editionMinutes).filter(n=>n!==null))].sort((a,b)=>a-b);
  const runtimeText=runtimes.length?runtimes.map(n=>n+' min').join(' / '):(f.runtime?esc(f.runtime)+' min':'–');
- const editions=f.editions.map(e=>`<div class="edition edition-with-count">${watchCountTag(Math.max(0,(watchCounts.editions.get(String(e.dbId))||0)+Number(e.watchOffset||0)),Boolean(e.discSeen||e.disc_seen||e.disc_seen===true))}<b>${esc(e.format||'–')}</b> · ${esc(e.edition||'Standaard')}<br><span class="muted">${esc(e.label||'')}${e.title&&e.title.toLowerCase()!==f.title.toLowerCase()?' · '+esc(e.title):''}</span></div>`).join('');
+ const editions=f.editions.map(e=>`<div class="edition edition-with-count">${watchCountTag(Math.max(0,(watchCounts.editions.get(String(e.dbId))||0)+Number(e.watchOffset||0)),Boolean(e.discSeen||e.disc_seen||e.disc_seen===true))}<b>${esc(e.format||'–')}</b> · ${esc(displayFieldCapitalization(e.edition||'Standaard'))}<br><span class="muted">${esc(e.label||'')}${e.title&&e.title.toLowerCase()!==f.title.toLowerCase()?' · '+esc(e.title):''}</span></div>`).join('');
  const cuts=(f.cuts?.length?f.cuts.map(c=>({title:c.title,runtimes:[Number(c.runtime)].filter(n=>n>0),watchOffset:c.watchOffset})): [...new Map(f.editions.map(e=>[e.title||f.title,e.title||f.title])).values()].map(title=>({title,runtimes:[...new Set(f.editions.filter(e=>(e.title||f.title)===title).map(editionMinutes).filter(n=>n!==null))].sort((a,b)=>a-b),watchOffset:0})));
  $('detailBody').innerHTML=`<div class="film-detail-grid"><div class="detail-poster-column">${poster(f)}<button class="detail-poster-change" id="changeFilmPoster" type="button">Andere poster kiezen</button></div><div class="details"><div class="film-kicker">FILMDETAILS / FILM COLLECTIE</div><h2>${esc(displayFilmTitle(f.title))} <span class="film-year">(${esc(f.year||'–')})</span></h2><div class="meta">${runtimeText}<br>${esc(f.director||'–')}<br>${esc(f.genres||'–')}</div><div class="film-facts"><div class="film-fact ${(f.seen||watched.length)?'is-seen':''}"><span class="fact-label">Status</span><span>${(f.seen||watched.length)?'✓ Gezien':'Nog niet gezien'}</span></div><div class="film-fact history-link" role="button" tabindex="0" data-open-film-history="1" title="Bekijk alle kijkbeurten"><span class="fact-label">Aantal keer bekeken</span><span>${esc(String(num(f.watches)+extraWatches.filter(h=>normTitle(h.title)===normTitle(f.title)).length))}×</span></div><div class="film-fact history-link" role="button" tabindex="0" data-open-film-history="1" title="Bekijk de kijkgeschiedenis"><span class="fact-label">Laatst bekeken</span><span class="fact-date">${lastSeen?esc(lastSeen):'Niet beschikbaar in export'}</span></div></div><div class="film-rating-row"><div class="stat"><strong>${esc(filmRating(f)||'–')} <span aria-hidden="true" style="color:#d9ed80;font-size:.6em">★</span></strong><span>Mijn rating</span></div><a data-external="imdb" class="stat rating-link" href="${imdbFilmUrl(f)}" target="_blank" rel="noopener noreferrer" title="Zoek deze film op IMDb"><strong>${Number.isFinite(Number(f.imdb)) && String(f.imdb).trim()!=='' ? Number(f.imdb).toLocaleString('nl-NL',{minimumFractionDigits:1,maximumFractionDigits:1}) : '–'}</strong><span class="rating-logo imdb">IMDb ↗</span></a><a data-external="letterboxd" class="stat rating-link" href="${letterboxdFilmUrl(f)}" target="_blank" rel="noopener noreferrer" title="Zoek deze film op Letterboxd"><strong>${formatOneDecimal(f.letterboxd)}</strong><span class="rating-logo lb"><span style="color:#ff8000">●</span><span style="color:#00e054">●</span><span style="color:#40bcf4">●</span> Letterboxd ↗</span></a></div></div></div>
- <div class="film-languages"><div class="film-language"><span class="film-language-label">🌐 Gesproken taal</span><span class="film-language-value">${esc(f.language||'–')}</span></div><div class="film-language"><span class="film-language-label">💬 Ondertiteling</span><span class="film-language-value">${esc(f.subtitles||'–')}</span></div></div><div class="film-detail-sections"><section class="panel"><h3>💿 Mijn fysieke uitgaven (${f.editions.length})</h3>${editions||'<p class="muted">Geen uitgaven gevonden.</p>'}</section><section class="panel"><h3>🎞️ Versies / cuts</h3>${cuts.map(c=>`<div class="edition edition-with-count">${watchCountTag(Math.max(0,(cuts.length===1 && f.editions.length===1)
+ <div class="film-languages"><div class="film-language"><span class="film-language-label">🌐 Gesproken taal</span><span class="film-language-value">${esc(displayFieldCapitalization(f.language||'–'))}</span></div><div class="film-language"><span class="film-language-label">💬 Ondertiteling</span><span class="film-language-value">${esc(displayFieldCapitalization(f.subtitles||'–'))}</span></div></div><div class="film-detail-sections"><section class="panel"><h3>💿 Mijn fysieke uitgaven (${f.editions.length})</h3>${editions||'<p class="muted">Geen uitgaven gevonden.</p>'}</section><section class="panel"><h3>🎞️ Versies / cuts</h3>${cuts.map(c=>`<div class="edition edition-with-count">${watchCountTag(Math.max(0,(cuts.length===1 && f.editions.length===1)
  ? (watchCounts.editions.get(String(f.editions[0].dbId))||0)+Number(f.editions[0].watchOffset||0)
  : (watchCounts.cuts.get(cutName(c.title,f.title).toLocaleLowerCase('nl-NL'))||0)+Number(c.watchOffset||0)),discGroups(f).some(g=>g.name===cutName(c.title,f.title)&&g.seen))}${esc(displayFilmTitle(c.title))}${c.runtimes.length?' ('+c.runtimes.map(n=>n+' min').join(' / ')+')':''}</div>`).join('')}</section></div>
  <section class="panel film-director"><h3>🎥 Regisseur</h3><button class="director-card" id="directorCard"><span class="director-photo" id="directorPhoto" style="display:flex;align-items:center;justify-content:center">◈</span><span><strong>${esc(f.director||'Onbekend')}</strong><small>Bekijk films van deze regisseur →</small></span></button></section><section class="panel film-cast"><div class="film-cast-head"><h3 style="margin:0">🎭 Acteurs</h3><button class="cast-toggle" id="castToggle" style="display:none">Toon volledige cast</button></div><div class="cast-grid" id="castGrid"></div><p class="muted" id="castInfo" style="font-size:12px;margin-bottom:0"></p></section><section class="panel country-panel"><h3>🌍 Landen van herkomst</h3><div class="country-chips" id="filmCountryChips"><span class="country-hint">Productielanden ophalen…</span></div></section>`;
