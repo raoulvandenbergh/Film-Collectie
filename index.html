@@ -244,6 +244,9 @@ header small{letter-spacing:.4px}
 #detail .director-card small{color:#d1ad76}
 #detail .director-card:hover{border-color:#a48b5c;background:linear-gradient(125deg,#26352b,#1b2a22)}
 @media(max-width:720px){#detail .director-card{width:100%;min-width:0;max-width:460px}}
+
+/* Film39: boutique-label subtiel goud, inline met de editie. */
+.diary-calendar .diary-label{color:#d3ae78;font-weight:650;white-space:normal}
 </style><style>.admin-toggle{background:transparent;color:#d9ed80;border:1px solid #647b69;border-radius:9px;padding:9px 13px;cursor:pointer}.admin-dialog[hidden],#adminSignedIn[hidden],#adminSignedOut[hidden]{display:none!important}.admin-dialog{position:fixed;inset:0;z-index:10000;background:#000b;display:grid;place-items:center;padding:20px}.admin-card{position:relative;width:min(420px,100%);padding:28px;background:#172235;color:#f2f5f9;border:1px solid #52677b;border-radius:16px;box-shadow:0 24px 70px #0009}.admin-card h2{margin:0 0 8px}.admin-card label{display:block;margin-top:16px;margin-bottom:6px}.admin-card input{display:block;width:100%;box-sizing:border-box;padding:12px;border:1px solid #52677b;border-radius:8px;background:#0c1524;color:white}.admin-card button[type=submit],#adminLogout{margin-top:20px;background:#d9ed80;color:#101722;border:0;border-radius:8px;padding:12px 18px;cursor:pointer;font-weight:700}.admin-close{position:absolute;top:12px;right:12px;border:0;background:transparent;color:white;cursor:pointer;font-size:20px}#adminStatus{min-height:20px;font-size:13px;color:#f0c8a5}</style><style>/* v42 — beheerder: kijkbeurten aanpassen */
 .diary-edit-cell{width:45px;text-align:center!important}.diary-edit-button{border:1px solid #46566a;background:#223044;color:#d9ed80;border-radius:7px;padding:7px 9px;cursor:pointer;font-size:15px}.diary-edit-button:hover{border-color:#d9ed80;background:#30435a}
 #editWatchDialog[hidden]{display:none!important}#editWatchDialog .watch-card{max-height:92vh;overflow-y:auto}#editWatchDialog .watch-actions{justify-content:space-between;flex-wrap:wrap}#editWatchDialog .delete-watch{border-color:#8b454d;color:#ffb9b9;background:#40232c}#editWatchMessage{min-height:18px}
@@ -895,8 +898,11 @@ function diaryEditionDescription(x,film){
   }
  }
  const label=String(physical?.label||'').trim();
- if(label&&!parts.some(part=>part.toLocaleLowerCase('nl-NL').includes(label.toLocaleLowerCase('nl-NL'))))parts.push(label);
- return parts.join(' · ')||'—';
+ const alreadyMentioned=label&&parts.some(part=>part.toLocaleLowerCase('nl-NL').includes(label.toLocaleLowerCase('nl-NL')));
+ const base=parts.length?esc(parts.join(' · ')):'—';
+ return label&&!alreadyMentioned
+  ? `${base==='—'?'':base+' ' }<span class="diary-label">${base==='—'?'':'· '}${esc(label)}</span>`
+  : base;
 }
 function diaryViewingLabel(n){
  if(!n)return '—';
@@ -981,7 +987,7 @@ function updateDiary(){
   const calendar=isNew?`<div class="diary-month"><strong>${esc(monthText)}</strong><span>${esc(match?match[1]:'')}</span></div>`:'';
   const film=x._linkedFilmIndex!=null?DATA.films[x._linkedFilmIndex]:(diaryFilmId(x.title,x._year)>=0?DATA.films[diaryFilmId(x.title,x._year)]:null);
   const year=(film?.year||x._year)?`<span class="diary-film-year">(${esc(film?.year||x._year)})</span>`:'';
-  return `<tr class="${isNew?'month-start':''}"><td class="diary-month-cell">${calendar}</td><td class="diary-day">${esc(match?String(Number(match[3])):date)}</td><td class="diary-poster-cell">${diaryPoster(x.title,x._linkedFilmIndex)}</td><td class="diary-film">${film?`<button class="diary-film-link" data-film-id="${DATA.films.indexOf(film)}" title="Open filmpagina">${esc(displayFilmTitle(x.title))}${year}</button>`:`${esc(displayFilmTitle(x.title))}${year}`}</td><td class="diary-rating">${esc(String(x.rating??"").trim()!=="" ? String(x.rating) : (film ? (String(filmRating(film)??"").trim() || "—") : "—"))}</td><td class="diary-view-count">${esc(diaryViewingLabel(x._viewOrdinal))}</td><td class="diary-format">${esc(displayDiscFormat(x.format||''))}</td><td class="diary-edition">${esc(diaryEditionDescription(x,film))}<button type="button" class="ticket-open" data-ticket-index="${x._sourceIndex}" title="Bekijk bioscoopkaartje" aria-label="Bekijk bioscoopkaartje">▤ Ticket</button>${window.__filmAdminSignedIn===true&&x._dbId!=null?`<button type="button" class="diary-edit-button" data-watch-edit="${esc(String(x._dbId))}" title="Bewerk kijkbeurt" aria-label="Bewerk kijkbeurt">✎</button>`:''}</td></tr>`;
+  return `<tr class="${isNew?'month-start':''}"><td class="diary-month-cell">${calendar}</td><td class="diary-day">${esc(match?String(Number(match[3])):date)}</td><td class="diary-poster-cell">${diaryPoster(x.title,x._linkedFilmIndex)}</td><td class="diary-film">${film?`<button class="diary-film-link" data-film-id="${DATA.films.indexOf(film)}" title="Open filmpagina">${esc(displayFilmTitle(x.title))}${year}</button>`:`${esc(displayFilmTitle(x.title))}${year}`}</td><td class="diary-rating">${esc(String(x.rating??"").trim()!=="" ? String(x.rating) : (film ? (String(filmRating(film)??"").trim() || "—") : "—"))}</td><td class="diary-view-count">${esc(diaryViewingLabel(x._viewOrdinal))}</td><td class="diary-format">${esc(displayDiscFormat(x.format||''))}</td><td class="diary-edition">${diaryEditionDescription(x,film)}<button type="button" class="ticket-open" data-ticket-index="${x._sourceIndex}" title="Bekijk bioscoopkaartje" aria-label="Bekijk bioscoopkaartje">▤ Ticket</button>${window.__filmAdminSignedIn===true&&x._dbId!=null?`<button type="button" class="diary-edit-button" data-watch-edit="${esc(String(x._dbId))}" title="Bewerk kijkbeurt" aria-label="Bewerk kijkbeurt">✎</button>`:''}</td></tr>`;
  }).join('');
 
  document.querySelectorAll('[data-ticket-index]').forEach(el=>el.addEventListener('click',()=>openCinemaTicket(Number(el.dataset.ticketIndex))));
