@@ -2443,7 +2443,7 @@ synchronizeCollection();
  }
  function addEdition(existing=null){
   const row=document.createElement('div');row.className='add-film-row';row.innerHTML=`<div class="add-film-row-head"><strong>Fysieke uitgave</strong><button type="button" class="remove-row-btn" aria-label="Verwijder uitgave">✕</button></div><div class="add-film-grid"><div><label>Formaat</label><select class="edition-format"><option>Blu-ray</option><option>4K</option><option>4K + Blu-ray</option><option>DVD</option></select></div><div><label>Editie</label><input class="edition-type" value="Standaard" placeholder="Standaard / Steelbook / Limited Edition"></div><div><label>Label / distributeur</label><input class="edition-label" placeholder="Criterion Collection"></div><div><label>Welke cuts zitten op deze uitgave? (meerdere mogelijk)</label><select class="edition-cut" multiple size="3"></select><small>Gebruik Cmd (Mac) of Ctrl om meerdere cuts te selecteren.</small></div><div><label>Totaal gezien (deze uitgave)</label><input class="edition-watches" type="number" min="0" step="1" placeholder="Automatisch"></div></div>`;
-  row.querySelector('.remove-row-btn').onclick=()=>{if(el('newFilmEditions').children.length>1)row.remove();else status.textContent='Minimaal één fysieke uitgave is nodig.'};if(existing){row.dataset.dbId=existing.dbId||'';row.dataset.watchOffset=String(existing.watchOffset||0);row.querySelector('.edition-watches').value=String(Math.max(0,(editionWatchCounts(DATA.films[activeDetailId]||{editions:[]}).editions.get(String(existing.dbId))||0)+(existing.watchOffset||0)));row.querySelector('.edition-format').value=existing.format||'Blu-ray';row.querySelector('.edition-type').value=existing.edition||'';row.querySelector('.edition-label').value=existing.label||'';}el('newFilmEditions').appendChild(row);refreshEditionCuts();
+  row.querySelector('.remove-row-btn').onclick=()=>{if(row.dataset.dbId){status.textContent='Bestaande fysieke uitgaven kunnen hier niet worden verwijderd, zodat je afgespeelde discs behouden blijven.';return;}if(el('newFilmEditions').children.length>1)row.remove();else status.textContent='Minimaal één fysieke uitgave is nodig.'};if(existing){row.dataset.dbId=existing.dbId||'';row.dataset.watchOffset=String(existing.watchOffset||0);row.querySelector('.edition-watches').value=String(Math.max(0,(editionWatchCounts(DATA.films[activeDetailId]||{editions:[]}).editions.get(String(existing.dbId))||0)+(existing.watchOffset||0)));row.querySelector('.edition-format').value=existing.format||'Blu-ray';row.querySelector('.edition-type').value=existing.edition||'';row.querySelector('.edition-label').value=existing.label||'';}el('newFilmEditions').appendChild(row);refreshEditionCuts();
  }
  function refreshEditionCuts(){
   const cuts=[...el('newFilmCuts').querySelectorAll('.add-film-row')].map((r,i)=>({title:r.querySelector('.cut-title').value.trim()||val('newFilmTitle')||'Standaardversie',i}));
@@ -2526,6 +2526,18 @@ synchronizeCollection();
   // Eén uitgave en één cut hebben altijd hetzelfde zichtbare aantal.
   // De uitgave is hierbij leidend, zodat een oude cut-correctie niet terugkomt.
   if(cuts.length===1 && editions.length===1 && editions[0].manual!=='')cuts[0].manual=editions[0].manual;
+  // Film41: wijzigingen aan aantallen mogen NOOIT bestaande fysieke uitgaven
+  // verwijderen of vervangen. Dit beschermt ook hun disc_seen-status.
+  if(editingId){
+   const oldEditions=DATA.films[activeDetailId]?.editions||[];
+   const editRows=[...el('newFilmEditions').querySelectorAll('.add-film-row')];
+   const savedIds=editRows.map(r=>String(r.dataset.dbId||'')).filter(Boolean);
+   if(new Set(savedIds).size!==savedIds.length){status.textContent='Opslaan gestopt: een fysieke uitgave komt dubbel voor. Vernieuw de pagina en probeer opnieuw.';return;}
+   const missing=oldEditions.filter(e=>e.dbId&&!savedIds.includes(String(e.dbId)));
+   if(missing.length){status.textContent='Opslaan gestopt: een bestaande fysieke uitgave zou verdwijnen ('+missing.map(e=>[e.format,e.edition].filter(Boolean).join(' ')).join(', ')+'). Bestaande uitgaven kunnen niet via dit bewerkingsvenster worden verwijderd, om de afgespeeld-status te beschermen.';return;}
+   const unknown=savedIds.filter(id=>!oldEditions.some(e=>String(e.dbId)===id));
+   if(unknown.length){status.textContent='Opslaan gestopt: een uitgave heeft een onbekend ID. Vernieuw de pagina en probeer opnieuw.';return;}
+  }
   const btn=el('saveNewFilm');btn.disabled=true;status.textContent='Film opslaan in Supabase…';
   let filmId=null;
   try{
@@ -2552,6 +2564,15 @@ synchronizeCollection();
     if(!rows?.[0]?.id)throw Error('Cut kon niet worden opgeslagen.');savedCuts.push(rows[0].id);
    }
    const existing=editingId?(DATA.films[activeDetailId]?.editions||[]):[];
+   // Controleer opnieuw tegen de actuele database vóór we uitgaven wijzigen.
+   // Een verouderde browserweergave mag geen fysieke uitgaven wissen.
+   if(editingId){
+    const live=await adminRest('editions','GET',null,token,'?select=id,disc_seen&film_id=eq.'+encodeURIComponent(filmId));
+    const displayedIds=new Set(existing.map(e=>String(e.dbId)).filter(Boolean));
+    const liveIds=new Set((live||[]).map(e=>String(e.id)));
+    if(displayedIds.size!==liveIds.size||[...liveIds].some(id=>!displayedIds.has(id)))throw Error('De fysieke uitgaven zijn intussen gewijzigd. Vernieuw de pagina en probeer opnieuw; er is niets aan de uitgaven verwijderd.');
+   }
+
    const editionRows=[...el('newFilmEditions').querySelectorAll('.add-film-row')];
    const retained=new Set(editionRows.map(r=>String(r.dataset.dbId||'')).filter(Boolean));
    for(const ed of existing){if(ed.dbId&&!retained.has(String(ed.dbId))){const linked=await adminRest('watch_history','GET',null,token,'?select=id&edition_id=eq.'+encodeURIComponent(ed.dbId));if(linked?.length)throw Error('Uitgave met kijkgeschiedenis kan niet worden verwijderd.');}}
@@ -2568,7 +2589,8 @@ synchronizeCollection();
     await adminRest('edition_cuts','DELETE',null,token,'?edition_id=eq.'+encodeURIComponent(edId));
     await adminRest('edition_cuts','POST',e.cutIndices.map(ci=>({edition_id:edId,cut_id:savedCuts[ci]})),token);
    }
-   for(const ed of existing){if(ed.dbId&&!retained.has(String(ed.dbId)))await adminRest('editions','DELETE',null,token,'?id=eq.'+encodeURIComponent(ed.dbId));}
+   // Film41: geen impliciete DELETE op editions bij het bewerken.
+   // Bestaande uitgaven en hun disc_seen-registraties blijven intact.
    // Verwijder ongebruikte cuts pas na het opnieuw koppelen van alle uitgaven.
    if(editingId){for(const c of DATA.films[activeDetailId]?.cuts||[]){if(!savedCuts.some(id=>String(id)===String(c.dbId)))await adminRest('film_cuts','DELETE',null,token,'?id=eq.'+encodeURIComponent(c.dbId));}}
    status.textContent='✓ Film en fysieke uitgaven opgeslagen. Collectie wordt vernieuwd…';
