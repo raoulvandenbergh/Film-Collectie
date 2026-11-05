@@ -699,9 +699,23 @@ const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>
 function poster(f){let id=DATA.films.indexOf(f),url=posterCache[id]||'';return `<div class="poster" data-poster-id="${id}" style="--a:${color(f.title)}"><span class="poster-placeholder"><b>${esc(f.title)}</b></span>${url?`<img loading="lazy" src="${esc(url)}" alt="Poster van ${esc(f.title)}" onerror="this.remove()">`:''}${f.editions.some(e=>e.format.includes('4K'))?'<span class="tag">4K ULTRA HD</span>':''}</div>`}let diaryFilterFilmId=null;
 document.getElementById('homeBrand').addEventListener('click',()=>show('collection'));document.getElementById('homeBrand').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show('collection')}});
 let collectionReturnScrollY=null;
+let diaryReturnScrollY=null;
+let detailReturnView="collection";
 function show(v){
  const current=document.querySelector('.view.active')?.id;
- if(current==='collection'&&v==='detail')collectionReturnScrollY=window.scrollY;
+ if(v==='detail'&&current==='diary'){detailReturnView='diary';diaryReturnScrollY=window.scrollY;}
+ if(v==='detail'&&current==='collection'){detailReturnView='collection';collectionReturnScrollY=window.scrollY;}
+ if(v==='detail'&&current!=='collection'&&current!=='diary')detailReturnView='collection';
+ if(v==='detail')$('back').textContent=detailReturnView==='diary'?'← Terug naar kijkgeschiedenis':'← Terug naar collectie';
+ if(v==='diary'&&current==='detail'&&detailReturnView==='diary'&&diaryReturnScrollY!==null){
+  const target=diaryReturnScrollY;
+  diaryReturnScrollY=null;
+  document.querySelectorAll('.view').forEach(e=>e.classList.toggle('active',e.id==='diary'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.view==='diary'));
+  window.scrollTo({top:target,left:0,behavior:'auto'});
+  requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:target,left:0,behavior:'auto'})));
+  return;
+ }
  if(v==='collection'&&current==='detail'&&collectionReturnScrollY!==null){
   const target=collectionReturnScrollY;
   collectionReturnScrollY=null;
@@ -712,7 +726,7 @@ function show(v){
   requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:target,left:0,behavior:'auto'})));
   return;
  }
- if(v==='collection'&&$('personFilterBanner'))$('personFilterBanner').hidden=true;if(v==='statistics')setTimeout(()=>{scheduleStatisticsMap();renderTopCharts()},0);if(v==='diary'){diaryFilterFilmId=null;$('diaryBackFilm').hidden=true;updateDiary();}if(v!=='diary'){$('diaryBackFilm').hidden=true;} document.querySelectorAll('.view').forEach(e=>e.classList.toggle('active',e.id===v));document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));window.scrollTo(0,0)}document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.view));$('back').onclick=()=>show('collection');
+ if(v==='collection'&&$('personFilterBanner'))$('personFilterBanner').hidden=true;if(v==='statistics')setTimeout(()=>{scheduleStatisticsMap();renderTopCharts()},0);if(v==='diary'){diaryFilterFilmId=null;$('diaryBackFilm').hidden=true;updateDiary();}if(v!=='diary'){$('diaryBackFilm').hidden=true;} document.querySelectorAll('.view').forEach(e=>e.classList.toggle('active',e.id===v));document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));window.scrollTo(0,0)}document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.view));$('back').onclick=()=>show(detailReturnView==='diary'?'diary':'collection');
 function summary(){let a=[['Films in bezit',DATA.stats.films],['Films gezien',DATA.stats.seen],['Discs gezien',DATA.films.filter(f=>hasPlayedEdition(f)).length],['Geregistreerde kijkbeurten',DATA.stats.entries]];let h=a.map(([k,v])=>`<div class="stat"><strong>${v}</strong><span>${k}</span></div>`).join('');$('summary').innerHTML=h;$('stats2').innerHTML=h}summary();
 function fillGenreFilter(){const sel=$('genre'),previous=sel.value;const names=[...new Set(DATA.films.flatMap(f=>String(f.genres||'').split(/\s*[|,;]\s*/).map(x=>x.trim()).filter(Boolean)))].sort((a,b)=>a.localeCompare(b,'nl'));sel.innerHTML='<option value="">Alle genres</option>'+names.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');if(names.includes(previous))sel.value=previous;}fillGenreFilter();
 function collectionSortTitle(title){return String(title||'').trim().replace(/^(?:the|an|a)\s+/i,'').toLocaleLowerCase('nl-NL');}
