@@ -2247,8 +2247,8 @@ synchronizeCollection();
  };
 
  el('closeAddFilm').onclick=el('cancelNewFilm').onclick=close;
- dlg.addEventListener('click',e=>{if(e.target===dlg)close()});
- document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!dlg.hidden)close()});
+ // Outside clicks deliberately do not dismiss the add-film form.
+ // Escape deliberately does not dismiss the add-film form.
  el('addNewCut').onclick=()=>{addCut(val('newFilmTitle'),val('newFilmRuntime'));refreshEditionCuts()};
  el('addNewEdition').onclick=addEdition;
  el('newFilmCuts').addEventListener('input',refreshEditionCuts);
