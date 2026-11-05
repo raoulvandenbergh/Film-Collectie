@@ -901,7 +901,7 @@ function diaryEditionDescription(x,film){
  const alreadyMentioned=label&&parts.some(part=>part.toLocaleLowerCase('nl-NL').includes(label.toLocaleLowerCase('nl-NL')));
  const base=parts.length?esc(parts.join(' · ')):'—';
  return label&&!alreadyMentioned
-  ? `${base==='—'?'':base+' ' }<span class="diary-label">${base==='—'?'':'· '}${esc(label)}</span>`
+  ? `${base==='—'?'':base+' ' }<span class="diary-label">${base==='—'?'':'· '}${esc(displayEdition(label))}</span>`
   : base;
 }
 function diaryViewingLabel(n){
