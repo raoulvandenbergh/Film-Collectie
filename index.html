@@ -1389,9 +1389,23 @@ $('mapZoomIn').onclick=()=>zoomMap(.88);
 $('mapZoomOut').onclick=()=>zoomMap(1/.88);
 $('mapZoomReset').onclick=()=>{mapView={x:0,y:0,w:960,h:510};applyMapView();hideMapTip()};
 $('worldMap').addEventListener('wheel',e=>{e.preventDefault();const r=$('worldMap').getBoundingClientRect();zoomMap(e.deltaY<0?.94:1/.94,(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height)},{passive:false});
-$('worldMap').addEventListener('pointerdown',e=>{if(e.button!==0)return;mapPointer={id:e.pointerId,x:e.clientX,y:e.clientY,view:{...mapView}};mapDragging=false;$('worldMap').setPointerCapture(e.pointerId)});
+$('worldMap').addEventListener('pointerdown',e=>{if(e.button!==0)return;mapPointer={id:e.pointerId,x:e.clientX,y:e.clientY,view:{...mapView}};mapDragging=false});
 $('worldMap').addEventListener('pointermove',e=>{if(!mapPointer||e.pointerId!==mapPointer.id)return;const dx=e.clientX-mapPointer.x,dy=e.clientY-mapPointer.y;if(Math.hypot(dx,dy)>5)mapDragging=true;if(!mapDragging)return;const r=$('worldMap').getBoundingClientRect();mapView.x=Math.max(0,Math.min(960-mapView.w,mapPointer.view.x-dx/r.width*mapView.w));mapView.y=Math.max(0,Math.min(510-mapView.h,mapPointer.view.y-dy/r.height*mapView.h));applyMapView();hideMapTip()});
-function stopMapDrag(e){if(mapPointer?.id===e.pointerId){mapPointer=null;setTimeout(()=>mapDragging=false,0)}}
+let mapCountryPointerHandled=false;
+function stopMapDrag(e){
+ if(mapPointer?.id!==e.pointerId)return;
+ const wasDragging=mapDragging;
+ mapPointer=null;
+ if(e.type==='pointerup'&&!wasDragging){
+  const path=e.target.closest?.('[data-map-country]');
+  const code=path?.dataset.mapCountry;
+  if(code&&/^[A-Z]{2}$/.test(code)){
+   mapCountryPointerHandled=true;
+   selectCountry(code);
+  }
+ }
+ setTimeout(()=>{mapDragging=false;mapCountryPointerHandled=false},0);
+}
 $('worldMap').addEventListener('pointerup',stopMapDrag);$('worldMap').addEventListener('pointercancel',stopMapDrag);
 
 
@@ -1437,7 +1451,7 @@ function renderWorldMap(){
  }).join('');
  svg.querySelectorAll('[data-map-country]').forEach(el=>{
   const code=el.dataset.mapCountry;if(!/^[A-Z]{2}$/.test(code))return;
-  el.addEventListener('click',()=>{if(!mapDragging)selectCountry(code)});
+  el.addEventListener('click',()=>{if(!mapDragging&&!mapCountryPointerHandled)selectCountry(code)});
   el.addEventListener('pointermove',e=>showMapTip(e,code,totals[code]||0));
   el.addEventListener('pointerenter',e=>showMapTip(e,code,totals[code]||0));
   el.addEventListener('pointerleave',hideMapTip);
