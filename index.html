@@ -1476,7 +1476,7 @@ function detail(f){
  const editions=f.editions.map(e=>`<div class="edition edition-with-count">${watchCountTag(Math.max(0,(watchCounts.editions.get(String(e.dbId))||0)+Number(e.watchOffset||0)),Boolean(e.discSeen||e.disc_seen||e.disc_seen===true))}<b>${esc(e.format||'–')}</b> · ${esc(e.edition||'Standaard')}<br><span class="muted">${esc(e.label||'')}${e.title&&e.title.toLowerCase()!==f.title.toLowerCase()?' · '+esc(e.title):''}</span></div>`).join('');
  const cuts=(f.cuts?.length?f.cuts.map(c=>({title:c.title,runtimes:[Number(c.runtime)].filter(n=>n>0),watchOffset:c.watchOffset})): [...new Map(f.editions.map(e=>[e.title||f.title,e.title||f.title])).values()].map(title=>({title,runtimes:[...new Set(f.editions.filter(e=>(e.title||f.title)===title).map(editionMinutes).filter(n=>n!==null))].sort((a,b)=>a-b),watchOffset:0})));
  $('detailBody').innerHTML=`<div class="film-detail-grid"><div class="detail-poster-column">${poster(f)}<button class="detail-poster-change" id="changeFilmPoster" type="button">Andere poster kiezen</button></div><div class="details"><div class="film-kicker">FILMDETAILS / FILM COLLECTIE</div><h2>${esc(displayFilmTitle(f.title))} <span class="film-year">(${esc(f.year||'–')})</span></h2><div class="meta">${runtimeText}<br>${esc(f.director||'–')}<br>${esc(f.genres||'–')}</div><div class="film-facts"><div class="film-fact ${(f.seen||watched.length)?'is-seen':''}"><span class="fact-label">Status</span><span>${(f.seen||watched.length)?'✓ Gezien':'Nog niet gezien'}</span></div><div class="film-fact history-link" role="button" tabindex="0" data-open-film-history="1" title="Bekijk alle kijkbeurten"><span class="fact-label">Aantal keer bekeken</span><span>${esc(String(num(f.watches)+extraWatches.filter(h=>normTitle(h.title)===normTitle(f.title)).length))}×</span></div><div class="film-fact history-link" role="button" tabindex="0" data-open-film-history="1" title="Bekijk de kijkgeschiedenis"><span class="fact-label">Laatst bekeken</span><span class="fact-date">${lastSeen?esc(lastSeen):'Niet beschikbaar in export'}</span></div></div><div class="film-rating-row"><div class="stat"><strong>${esc(filmRating(f)||'–')} <span aria-hidden="true" style="color:#d9ed80;font-size:.6em">★</span></strong><span>Mijn rating</span></div><a data-external="imdb" class="stat rating-link" href="${imdbFilmUrl(f)}" target="_blank" rel="noopener noreferrer" title="Zoek deze film op IMDb"><strong>${Number.isFinite(Number(f.imdb)) && String(f.imdb).trim()!=='' ? Number(f.imdb).toLocaleString('nl-NL',{minimumFractionDigits:1,maximumFractionDigits:1}) : '–'}</strong><span class="rating-logo imdb">IMDb ↗</span></a><a data-external="letterboxd" class="stat rating-link" href="${letterboxdFilmUrl(f)}" target="_blank" rel="noopener noreferrer" title="Zoek deze film op Letterboxd"><strong>${formatOneDecimal(f.letterboxd)}</strong><span class="rating-logo lb"><span style="color:#ff8000">●</span><span style="color:#00e054">●</span><span style="color:#40bcf4">●</span> Letterboxd ↗</span></a></div></div></div>
- <div class="film-languages"><div class="film-language"><span class="film-language-label">🌐 Gesproken taal</span><span class="film-language-value">${esc(f.language||'–')}</span></div><div class="film-language"><span class="film-language-label">💬 Ondertiteling</span><span class="film-language-value">${esc(f.subtitles||'–')}</span></div></div><div class="film-detail-sections"><section class="panel"><h3>💿 Mijn fysieke uitgaven (${f.editions.length})</h3>${watchCounts.unassigned?`<p class="muted">${watchCounts.total} keer bekeken volgens de collectie en kijkgeschiedenis; ${watchCounts.unassigned} niet aan een specifieke uitgave toe te wijzen. Deze zijn niet aan een willekeurige disc toegekend.</p>`:''}${editions||'<p class="muted">Geen uitgaven gevonden.</p>'}</section><section class="panel"><h3>🎞️ Versies / cuts</h3>${cuts.map(c=>`<div class="edition edition-with-count">${watchCountTag(Math.max(0,(cuts.length===1 && f.editions.length===1)
+ <div class="film-languages"><div class="film-language"><span class="film-language-label">🌐 Gesproken taal</span><span class="film-language-value">${esc(f.language||'–')}</span></div><div class="film-language"><span class="film-language-label">💬 Ondertiteling</span><span class="film-language-value">${esc(f.subtitles||'–')}</span></div></div><div class="film-detail-sections"><section class="panel"><h3>💿 Mijn fysieke uitgaven (${f.editions.length})</h3>${editions||'<p class="muted">Geen uitgaven gevonden.</p>'}</section><section class="panel"><h3>🎞️ Versies / cuts</h3>${cuts.map(c=>`<div class="edition edition-with-count">${watchCountTag(Math.max(0,(cuts.length===1 && f.editions.length===1)
  ? (watchCounts.editions.get(String(f.editions[0].dbId))||0)+Number(f.editions[0].watchOffset||0)
  : (watchCounts.cuts.get(cutName(c.title,f.title).toLocaleLowerCase('nl-NL'))||0)+Number(c.watchOffset||0)),discGroups(f).some(g=>g.name===cutName(c.title,f.title)&&g.seen))}${esc(displayFilmTitle(c.title))}${c.runtimes.length?' ('+c.runtimes.map(n=>n+' min').join(' / ')+')':''}</div>`).join('')}</section></div>
  <section class="panel film-director"><h3>🎥 Regisseur</h3><button class="director-card" id="directorCard"><span class="director-photo" id="directorPhoto" style="display:flex;align-items:center;justify-content:center">◈</span><span><strong>${esc(f.director||'Onbekend')}</strong><small>Bekijk films van deze regisseur →</small></span></button></section><section class="panel film-cast"><div class="film-cast-head"><h3 style="margin:0">🎭 Acteurs</h3><button class="cast-toggle" id="castToggle" style="display:none">Toon volledige cast</button></div><div class="cast-grid" id="castGrid"></div><p class="muted" id="castInfo" style="font-size:12px;margin-bottom:0"></p></section><section class="panel country-panel"><h3>🌍 Landen van herkomst</h3><div class="country-chips" id="filmCountryChips"><span class="country-hint">Productielanden ophalen…</span></div></section>`;
@@ -2509,6 +2509,7 @@ synchronizeCollection();
    const editionRows=[...el('newFilmEditions').querySelectorAll('.add-film-row')];
    const retained=new Set(editionRows.map(r=>String(r.dataset.dbId||'')).filter(Boolean));
    for(const ed of existing){if(ed.dbId&&!retained.has(String(ed.dbId))){const linked=await adminRest('watch_history','GET',null,token,'?select=id&edition_id=eq.'+encodeURIComponent(ed.dbId));if(linked?.length)throw Error('Uitgave met kijkgeschiedenis kan niet worden verwijderd.');}}
+   const desiredEditionCounts=[];
    for(let i=0;i<editions.length;i++){
     const e=editions[i],row=editionRows[i],c=cuts[e.cutIndices[0]],old=existing.find(x=>String(x.dbId)===String(row.dataset.dbId));
     const currentCount=old?(editionWatchCounts(DATA.films[activeDetailId]).editions.get(String(old.dbId))||0):0;
@@ -2517,6 +2518,7 @@ synchronizeCollection();
     const payload={title:c.title,format:e.format,edition:e.edition,label:e.label,runtime:c.runtime,watch_offset:offset};
     const saved=row.dataset.dbId?await adminRest('editions','PATCH',payload,token,'?id=eq.'+encodeURIComponent(row.dataset.dbId)):await adminRest('editions','POST',{...payload,film_id:filmId,disc_seen:false},token);
     const edId=saved?.[0]?.id;if(!edId)throw Error('Uitgave kon niet worden opgeslagen.');
+    if(e.manual!=='')desiredEditionCounts.push({id:edId,count:Number(e.manual)});
     await adminRest('edition_cuts','DELETE',null,token,'?edition_id=eq.'+encodeURIComponent(edId));
     await adminRest('edition_cuts','POST',e.cutIndices.map(ci=>({edition_id:edId,cut_id:savedCuts[ci]})),token);
    }
@@ -2525,6 +2527,38 @@ synchronizeCollection();
    if(editingId){for(const c of DATA.films[activeDetailId]?.cuts||[]){if(!savedCuts.some(id=>String(id)===String(c.dbId)))await adminRest('film_cuts','DELETE',null,token,'?id=eq.'+encodeURIComponent(c.dbId));}}
    status.textContent='✓ Film en fysieke uitgaven opgeslagen. Collectie wordt vernieuwd…';
    close();await synchronizeCollection();
+   // The diary is reloaded asynchronously. Reconcile AFTER reloading it, so an
+   // older/late diary link cannot silently add watches to the manually saved number.
+   if(desiredEditionCounts.length){
+    const freshIdx=window.__supabaseFilmIds?.indexOf(filmId);
+    const freshFilm=freshIdx>=0?DATA.films[freshIdx]:null;
+    if(!freshFilm)throw Error('Film niet gevonden na verversen.');
+    const freshCounts=editionWatchCounts(freshFilm).editions;
+    let changed=false;
+    for(const target of desiredEditionCounts){
+     const ed=freshFilm.editions.find(x=>String(x.dbId)===String(target.id));
+     if(!ed)throw Error('Fysieke uitgave niet gevonden na verversen.');
+     const base=freshCounts.get(String(target.id))||0;
+     const exactOffset=target.count-base;
+     if(Number(ed.watchOffset||0)!==exactOffset){
+      await adminRest('editions','PATCH',{watch_offset:exactOffset},token,'?id=eq.'+encodeURIComponent(target.id));
+      ed.watchOffset=exactOffset;
+      changed=true;
+     }
+    }
+    // Re-read from Supabase to confirm the corrected values, rather than
+    // claiming success based on a stale in-memory edition object.
+    if(changed)await synchronizeCollection();
+    const verifyIdx=window.__supabaseFilmIds?.indexOf(filmId);
+    const verifyFilm=verifyIdx>=0?DATA.films[verifyIdx]:null;
+    if(!verifyFilm)throw Error('Film kon niet worden gecontroleerd.');
+    const verifyCounts=editionWatchCounts(verifyFilm).editions;
+    const mismatch=desiredEditionCounts.find(t=>{
+     const ed=verifyFilm.editions.find(x=>String(x.dbId)===String(t.id));
+     return !ed || Math.max(0,(verifyCounts.get(String(t.id))||0)+Number(ed.watchOffset||0))!==t.count;
+    });
+    if(mismatch)throw Error('Het opgeslagen aantal kon niet worden bevestigd. Probeer opnieuw.');
+   }
    const idx=window.__supabaseFilmIds?.indexOf(filmId);if(idx>=0){detail(DATA.films[idx]);show('detail')}
    if(!editingId)showPremiere(title,DATA.films[idx]?.poster||DATA.films[idx]?.posterUrl||lookupInfo?.poster_url||'');
   }catch(err){status.textContent='Opslaan niet gelukt: '+err.message+(filmId?' De film is mogelijk al aangemaakt; controleer Supabase voordat je opnieuw opslaat.':'');console.error(err)}finally{btn.disabled=false}
