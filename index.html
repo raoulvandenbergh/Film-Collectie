@@ -797,7 +797,7 @@ const watchedBefore2021=[
  ['Forrest Gump',1994],['The Hangover',2009],['Insomnia',2002],['Joker',2019],
  ['Kingsman: The Secret Service',2014],['Looper',2012],['Man on a Ledge',2012],
  ['The Next Three Days',2010],['Patriots Day',2016],['Ready Player One',2018],
- ['The Sixth Sense',1999],['Skyfall',2012],['Star Wars: The Phantom Menace (I)',1999],['Star Wars: Attack of the Clones (II)',2002],['V for Vendetta',2005],
+ ['The Sixth Sense',1999],['Skyfall',2012],['Star Wars: The Phantom Menace (I)',1999],['Star Wars: Attack of the Clones (II)',2002],['V for Vendetta',2006],
  ['Yes Man',2008],['Yesterday',2019]
 ];
 function renderPre2021Diary(){
@@ -1354,8 +1354,9 @@ function watchCountTag(n,seen){return `<span class="edition-watch-count" title="
 // Alleen de detailweergave krijgt minimaal 'gezien 1x'; opgeslagen kijkbeurten
 // en de teller 'Discs gezien' blijven ongewijzigd.
 function isWatchedBefore2021(f){
- return watchedBefore2021.some(([title,year])=>
-   Number(f.year)===year&&normTitle(f.title)===normTitle(title));
+ // Letterboxd en collectie kunnen verschillende releasejaren hebben.
+ // Match op dezelfde titel als de kalenderweergave, met cut-normalisatie.
+ return watchedBefore2021.some(([title])=>normTitle(f.title)===normTitle(title));
 }
 function historicalWatchCount(f,n){return isWatchedBefore2021(f)?Math.max(1,n):n;}
 function detail(f){
