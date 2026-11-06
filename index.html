@@ -3246,6 +3246,9 @@ function film57ShowTicket(info){
 #search::-webkit-search-cancel-button{cursor:pointer}
 #search{appearance:none;-webkit-appearance:none}
 /* Film58.3: mechanisch cijferwiel, langzaam verticaal doorrollen */
+/* Film58.4: cijferwielen behouden exact de oorspronkelijke grote statistiektypografie. */
+.stat strong .film583-digit,.stat strong .film583-track,.stat strong .film583-track>span{font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;color:inherit!important;letter-spacing:inherit!important}
+.stat strong .film583-digit{line-height:1.15!important}
 .film583-digit{display:inline-block;position:relative;overflow:hidden;vertical-align:bottom;height:1.15em;line-height:1.15em;min-width:.58em;text-align:center;font-variant-numeric:tabular-nums}
 .film583-track{display:flex;flex-direction:column;transform:translateY(0);transition:transform 3s cubic-bezier(.45,0,.2,1);will-change:transform}
 .film583-track.film583-rolled{transform:translateY(-50%)}
