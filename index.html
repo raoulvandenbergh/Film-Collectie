@@ -3237,6 +3237,8 @@ function film57ShowTicket(info){
 #detail.film57-projecting .film-detail-grid{animation:none!important}
 #detail.film57-projecting::before{display:none!important}
 .view.active{animation:film58-soft-enter .5s ease-out both!important}
+#detail.view.active{animation:film582-detail-enter .65s cubic-bezier(.16,.75,.25,1) both!important}
+@keyframes film582-detail-enter{0%{opacity:0;transform:translateY(28px) scale(.985)}65%{opacity:1}100%{opacity:1;transform:none}}
 @keyframes film58-soft-enter{from{opacity:.55}to{opacity:1}}
 /* Film58 — geen browser- of Google-autocomplete bij het zoeken */
 #search::-webkit-search-cancel-button{cursor:pointer}
@@ -3304,27 +3306,44 @@ function renderMemories(){
  host.querySelectorAll('[data-dir]').forEach(b=>b.onclick=()=>{memoryIndex=(memoryIndex+Number(b.dataset.dir)+list.length)%list.length;renderMemories()});
  host.querySelector('.film58-memory-open').onclick=()=>{if(f&&typeof detail==='function')detail(f)};
 }
+const animatingNumbers=new WeakSet();
 function animateNumber(el,value){
  const target=Number(value);if(!Number.isFinite(target)||target<0)return;
  const start=Number(el.dataset.film58Value??target);
  el.dataset.film58Value=String(target);
  if(start===target||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches){el.textContent=String(target);return}
- const began=performance.now(),duration=550;
- function tick(now){if(!el.isConnected)return;const p=Math.min(1,(now-began)/duration);el.textContent=String(Math.round(start+(target-start)*(1-Math.pow(1-p,3))));if(p<1)requestAnimationFrame(tick)}
+ animatingNumbers.add(el);
+ const began=performance.now(),duration=3000;
+ function tick(now){if(!el.isConnected)return;const p=Math.min(1,(now-began)/duration);el.textContent=String(Math.round(start+(target-start)*p));if(p<1)requestAnimationFrame(tick);else animatingNumbers.delete(el)}
  requestAnimationFrame(tick);
 }
 function checkMilestones(){
- const values={films:films().length,watches:records().length,discs:films().filter(f=>{try{return hasPlayedEdition(f)}catch(e){return false}}).length};
+ const list=films();if(!list.length)return; // Wacht tot Supabase werkelijk geladen is.
+ const values={films:list.length,watches:records().length,discs:list.filter(f=>{try{return hasPlayedEdition(f)}catch(e){return false}}).length};
  const thresholds={films:[100,250,500,750,1000],watches:[100,250,500,750,1000,1500,2000],discs:[100,250,400,500,750,1000]};
  const labels={films:'films in je collectie',watches:'geregistreerde kijkbeurten',discs:'verschillende films op disc gezien'};
- const key='rc-film58-milestones-v1';
+ const key='rc-film58-milestones-v2';
  let state={};try{state=JSON.parse(localStorage.getItem(key)||'{}')||{}}catch(e){}
- // First visit only establishes a baseline; it never celebrates historical achievements.
- if(!milestoneReady){milestoneReady=true;if(!state.initialized){state={initialized:true,values};try{localStorage.setItem(key,JSON.stringify(state))}catch(e){}return}}
+ if(!state.initialized){
+  // Alle historische mijlpalen worden meteen als afgehandeld beschouwd.
+  state={initialized:true,values,shown:[]};
+  for(const type of Object.keys(thresholds))for(const mark of thresholds[type])if(values[type]>=mark)state.shown.push(type+':'+mark);
+  try{localStorage.setItem(key,JSON.stringify(state))}catch(e){}
+  return;
+ }
  const previous=state.values||values;
+ const shown=new Set(state.shown||[]);
  let celebration=null;
- for(const type of ['films','watches','discs'])for(const mark of thresholds[type])if((previous[type]??values[type])<mark&&values[type]>=mark)celebration={type,mark};
- state.values=values;try{localStorage.setItem(key,JSON.stringify(state))}catch(e){}
+ for(const type of ['films','watches','discs']){
+  for(const mark of thresholds[type]){
+   const id=type+':'+mark;
+   if(values[type]>=mark&&previous[type]<mark&&!shown.has(id)){
+    shown.add(id);celebration={type,mark};
+   }
+  }
+ }
+ state.values=values;state.shown=Array.from(shown);
+ try{localStorage.setItem(key,JSON.stringify(state))}catch(e){}
  if(celebration&&!document.querySelector('.film58-milestone')){
   const el=document.createElement('div');el.className='film58-milestone';el.setAttribute('role','status');
   el.innerHTML=`✦ MIJLPAAL BEREIKT ✦<strong>${celebration.mark} ${labels[celebration.type]}!</strong><span>Een bijzonder moment in Raoul's Collectie.</span><br><button type="button">Sluiten</button>`;
@@ -3339,7 +3358,8 @@ function refresh(){
   for(const id of ['summary','stats2']){
    const host=document.getElementById(id);if(!host)continue;
    host.querySelectorAll('.stat strong').forEach((el,index)=>{
-    const value=Number(el.textContent.trim().replace(/\\D/g,''));if(!Number.isFinite(value))return;
+    if(animatingNumbers.has(el))return;
+    const value=Number(el.textContent.trim().replace(/\D/g,''));if(!Number.isFinite(value))return;
     const key=id+'-'+index;
     if(lastNumbers[key]===undefined){lastNumbers[key]=value;el.dataset.film58Value=String(value);return}
     const visible=host.closest('.view')?.classList.contains('active');
