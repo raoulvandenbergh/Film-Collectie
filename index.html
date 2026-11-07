@@ -3264,7 +3264,7 @@ function film57ShowTicket(info){
 /* Levendige, maar ingetogen statistieken */
 #summary .stat strong,#stats2 .stat strong{font-variant-numeric:tabular-nums}
 .film58-memories[hidden]{display:none!important}.film58-memories{margin:0 0 23px;padding:16px 20px;border:1px solid rgba(211,174,120,.42);border-radius:11px;background:linear-gradient(110deg,rgba(28,48,38,.95),rgba(15,25,24,.94));display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-.film58-memory-poster{width:52px;height:77px;object-fit:cover;border-radius:4px;border:1px solid #8b7655}
+.film58-memory-poster{width:62px;height:93px;object-fit:cover;border-radius:5px;border:1px solid #8b7655;display:block}.film58-memory-poster-button{flex:none;display:block;padding:0;background:transparent;border:0;border-radius:5px;cursor:pointer}.film58-memory-poster-button:hover .film58-memory-poster,.film58-memory-poster-button:focus-visible .film58-memory-poster{border-color:#f0d3a2;box-shadow:0 0 0 2px #d3ae7860}.film58-memory-poster-button:focus-visible{outline:2px solid #d3ae78;outline-offset:4px}
 .film58-memory-copy{flex:1;min-width:180px}.film58-memory-copy small{display:block;color:#d3ae78;letter-spacing:1.5px;font-size:10px;text-transform:uppercase;margin-bottom:6px}
 .film58-memory-copy strong{font-family:Georgia,serif;font-size:19px;color:#f5e7d0}.film58-memory-copy p{font-size:12px;color:#b9c7bd;margin:5px 0 0}
 .film58-memory-nav{display:flex;gap:7px}.film58-memory-nav button{border:1px solid #78664c;background:#1a3029;color:#e8c998;border-radius:7px;padding:8px 12px;cursor:pointer}
@@ -3297,6 +3297,8 @@ function films(){try{return DATA?.films||[]}catch(e){return []}}
 function entryFilm(e){
  const list=films();
  if(e.film&&typeof e.film==='object')return e.film;
+ if(e._linkedFilmIndex!=null&&list[Number(e._linkedFilmIndex)])return list[Number(e._linkedFilmIndex)];
+ if(typeof diaryFilmId==='function'){const index=diaryFilmId(e.title,e._year);if(index>=0&&list[index])return list[index]}
  if(e.filmId!==undefined&&Number.isInteger(Number(e.filmId))&&list[Number(e.filmId)])return list[Number(e.filmId)];
  const title=String(e.title||e.film_title||'').toLocaleLowerCase('nl-NL').trim();
  return list.find(f=>String(f.title||'').toLocaleLowerCase('nl-NL').trim()===title)||null;
@@ -3312,17 +3314,20 @@ function renderMemories(){
  const key=list.map(e=>e.date+'|'+e.title).join(';');if(key!==memoryKey){memoryIndex=0;memoryKey=key}
  memoryIndex=(memoryIndex+list.length)%list.length;
  const entry=list[memoryIndex],f=entryFilm(entry),title=entry.title||f?.title||'Film',years=new Date().getFullYear()-Number(entry.date.slice(0,4));
- let img=f?.poster||f?.poster_url||'';
+ const filmIndex=f?films().indexOf(f):-1;
+ let img=(filmIndex>=0?posterCache[filmIndex]:'')||f?.poster_url||f?.posterUrl||f?.poster||'';
  if(typeof img==='string'&&img.startsWith('/'))img='https://image.tmdb.org/t/p/w185'+img;
  if(typeof img!=='string'||!/^https:\/\//.test(img))img='';
  host.hidden=false;
- host.innerHTML=(img?`<img class="film58-memory-poster" alt="" src="${safe(img)}">`:'')+
+ host.innerHTML=(img?`<button class="film58-memory-poster-button" type="button" aria-label="Open filmpagina van ${safe(title)}"><img class="film58-memory-poster" alt="Poster van ${safe(title)}" src="${safe(img)}"></button>`:'')+
  `<div class="film58-memory-copy"><small>✦ Op deze dag · ${safe(entry.date.slice(8,10))}-${safe(entry.date.slice(5,7))}</small>
  <button class="film58-memory-open" type="button"><strong>${safe(title)}</strong></button>
  <p>${years===1?'1 jaar geleden':years+' jaar geleden'} bekeken${entry.rating!==undefined&&entry.rating!==null&&entry.rating!==''?' · ★ '+safe(entry.rating):''}</p></div>`+
  (list.length>1?`<div class="film58-memory-nav"><button type="button" data-dir="-1" aria-label="Vorige herinnering">‹</button><button type="button" data-dir="1" aria-label="Volgende herinnering">›</button></div>`:'');
  host.querySelectorAll('[data-dir]').forEach(b=>b.onclick=()=>{memoryIndex=(memoryIndex+Number(b.dataset.dir)+list.length)%list.length;renderMemories()});
- host.querySelector('.film58-memory-open').onclick=()=>{if(f&&typeof detail==='function')detail(f)};
+ const openFilm=()=>{if(f&&typeof detail==='function')detail(f)};
+ host.querySelector('.film58-memory-open').onclick=openFilm;
+ host.querySelector('.film58-memory-poster-button')?.addEventListener('click',openFilm);
 }
 const animatingNumbers=new WeakSet();
 function animateNumber(el,value){
