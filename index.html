@@ -3273,6 +3273,20 @@ function film57ShowTicket(info){
 .film58-milestone{position:fixed;bottom:25px;left:50%;transform:translateX(-50%);z-index:12000;background:linear-gradient(125deg,#2a261a,#13271e);border:1px solid #c8a36a;border-radius:12px;padding:20px 24px;box-shadow:0 20px 55px #000a;color:#f3d6a5;text-align:center;max-width:calc(100vw - 32px);min-width:min(350px,90vw)}
 .film58-milestone strong{display:block;font:24px Georgia,serif;margin:7px 0}.film58-milestone button{border:1px solid #b99967;background:#24382b;color:#f1ddbc;border-radius:6px;padding:7px 12px;cursor:pointer;margin-top:9px}
 @media(prefers-reduced-motion:reduce){.view.active{animation:none!important}}
+
+/* Compacte herinneringsbalk met inklapknop */
+.film58-memories{position:relative;min-height:0;padding:11px 17px;gap:13px;margin-bottom:18px}
+.film58-memory-poster{width:48px;height:72px}
+.film58-memory-copy strong{font-size:17px}
+.film58-memory-copy small{margin-bottom:4px}
+.film58-memory-copy p{margin-top:3px}
+.film58-memory-toggle{position:absolute;top:8px;left:8px;z-index:2;background:#142b24;border:1px solid #79694e;border-radius:6px;color:#e6c99b;cursor:pointer;font-size:12px;line-height:1;padding:4px 7px}
+.film58-memories:not(.film58-collapsed){padding-left:38px}
+.film58-memories.film58-collapsed{padding:9px 14px 9px 43px;min-height:39px;align-items:center}
+.film58-memories.film58-collapsed .film58-memory-content{display:none!important}
+.film58-memory-content{display:flex;align-items:center;gap:13px;flex:1;min-width:0;flex-wrap:wrap}
+.film58-memory-collapsed-label{display:none;color:#d3ae78;font-size:12px;letter-spacing:.7px}
+.film58-memories.film58-collapsed .film58-memory-collapsed-label{display:block}
 </style>
 <script id="film58Script">
 (function(){
@@ -3291,6 +3305,9 @@ if(search){
  // Browser suggestions can still be controlled by browser settings/extensions.
 }
 let memoryIndex=0,memoryKey='',lastNumbers={},milestoneReady=false;
+let memoryCollapsed=false;
+try{memoryCollapsed=localStorage.getItem('rc-memory-collapsed')==='1'}catch(e){}
+
 const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','"':'&quot;',"'":'&#39;'}[c]));
 function records(){try{return typeof allHistory==='function'?allHistory():[]}catch(e){return []}}
 function films(){try{return DATA?.films||[]}catch(e){return []}}
@@ -3319,11 +3336,21 @@ function renderMemories(){
  if(typeof img==='string'&&img.startsWith('/'))img='https://image.tmdb.org/t/p/w185'+img;
  if(typeof img!=='string'||!/^https:\/\//.test(img))img='';
  host.hidden=false;
- host.innerHTML=(img?`<button class="film58-memory-poster-button" type="button" aria-label="Open filmpagina van ${safe(title)}"><img class="film58-memory-poster" alt="Poster van ${safe(title)}" src="${safe(img)}"></button>`:'')+
+ host.classList.toggle('film58-collapsed',memoryCollapsed);
+ host.innerHTML=`<button type="button" class="film58-memory-toggle" aria-label="${memoryCollapsed?'Toon':'Verberg'} Op deze dag" title="${memoryCollapsed?'Toon':'Verberg'} Op deze dag">${memoryCollapsed?'＋':'−'}</button><span class="film58-memory-collapsed-label">✦ Op deze dag · Tonen</span><div class="film58-memory-content">`+(img?`<button class="film58-memory-poster-button" type="button" aria-label="Open filmpagina van ${safe(title)}"><img class="film58-memory-poster" alt="Poster van ${safe(title)}" src="${safe(img)}"></button>`:'')+
  `<div class="film58-memory-copy"><small>✦ Op deze dag · ${safe(entry.date.slice(8,10))}-${safe(entry.date.slice(5,7))}</small>
  <button class="film58-memory-open" type="button"><strong>${safe(title)}</strong></button>
  <p>${years===1?'1 jaar geleden':years+' jaar geleden'} bekeken${entry.rating!==undefined&&entry.rating!==null&&entry.rating!==''?' · ★ '+safe(entry.rating):''}</p></div>`+
- (list.length>1?`<div class="film58-memory-nav"><button type="button" data-dir="-1" aria-label="Vorige herinnering">‹</button><button type="button" data-dir="1" aria-label="Volgende herinnering">›</button></div>`:'');
+ (list.length>1?`<div class="film58-memory-nav"><button type="button" data-dir="-1" aria-label="Vorige herinnering">‹</button><button type="button" data-dir="1" aria-label="Volgende herinnering">›</button></div>`:'')+'</div>';
+ host.querySelector('.film58-memory-toggle').onclick=()=>{
+   memoryCollapsed=!memoryCollapsed;
+   try{localStorage.setItem('rc-memory-collapsed',memoryCollapsed?'1':'0')}catch(e){}
+   host.classList.toggle('film58-collapsed',memoryCollapsed);
+   const toggle=host.querySelector('.film58-memory-toggle');
+   toggle.textContent=memoryCollapsed?'＋':'−';
+   toggle.setAttribute('aria-label',(memoryCollapsed?'Toon':'Verberg')+' Op deze dag');
+   toggle.title=(memoryCollapsed?'Toon':'Verberg')+' Op deze dag';
+ };
  host.querySelectorAll('[data-dir]').forEach(b=>b.onclick=()=>{memoryIndex=(memoryIndex+Number(b.dataset.dir)+list.length)%list.length;renderMemories()});
  const openFilm=()=>{if(f&&typeof detail==='function')detail(f)};
  host.querySelector('.film58-memory-open').onclick=openFilm;
