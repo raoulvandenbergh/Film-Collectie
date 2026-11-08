@@ -3473,6 +3473,33 @@ window.addEventListener('focus',refresh);
 #fwShelf[hidden]{display:none!important}
 #fwShopPanel:not([hidden]){display:block!important}
 #fwShopPanel{scroll-margin-top:120px}
+
+#fwShopPanel:has(.fw-feature-layout){max-width:1320px}
+.fw-feature-layout{display:grid;grid-template-columns:200px minmax(0,1fr) 275px;gap:27px;align-items:start}
+.fw-feature-poster .fw-shop-poster{width:100%;max-width:200px;border:1px solid #8e7956;border-radius:9px}
+.fw-feature-main{min-width:0}
+.fw-feature-title{font:normal clamp(30px,3.5vw,48px) Georgia,serif;color:#f0e4ce;margin:9px 0 18px}
+.fw-feature-title span{font:normal .45em system-ui,sans-serif;color:#b5b9ac;white-space:nowrap}
+.fw-full-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:26px}
+.fw-full-actions button{background:#263f34;border:1px solid #ae8d5a;color:#f4dfb5;padding:13px 18px;border-radius:8px;font-weight:700;cursor:pointer}
+.fw-full-actions button:first-child{background:#63302b}
+.fw-feature-section{border-top:1px solid #8e795644;padding:18px 0 22px}
+.fw-feature-section h3,.fw-feature-trailer h3{font:normal 24px Georgia,serif;color:#eddbb5;margin:0 0 14px}
+.fw-feature-section p{color:#d0cec2;line-height:1.75;white-space:pre-line}
+.fw-feature-person{display:flex;align-items:center;gap:13px}
+.fw-feature-person img{width:65px;height:80px;object-fit:cover;border-radius:7px}
+.fw-feature-cast{display:grid;grid-template-columns:repeat(auto-fill,minmax(95px,1fr));gap:13px}
+.fw-feature-actor{min-width:0;font-size:12px}
+.fw-feature-actor img,.fw-feature-actor-empty{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:7px;background:#19352d;display:grid;place-items:center}
+.fw-feature-actor strong,.fw-feature-actor small{display:block;margin-top:5px;overflow-wrap:anywhere}
+.fw-feature-actor small{color:#aab7ae}
+.fw-feature-trailer{background:#10231e;border:1px solid #8e795644;border-radius:10px;padding:13px}
+.fw-feature-video{aspect-ratio:16/9;background:#07110e;display:grid;place-items:center;text-align:center;color:#b8b9ae;font-size:12px;overflow:hidden}
+.fw-feature-video a{position:relative;width:100%;height:100%;display:block;color:white}
+.fw-feature-video img{width:100%;height:100%;object-fit:cover;opacity:.7}
+.fw-feature-video span{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#622c28;padding:9px;border-radius:7px;white-space:nowrap}
+@media(max-width:900px){.fw-feature-layout{grid-template-columns:145px minmax(0,1fr)}.fw-feature-trailer{grid-column:2;grid-row:1;position:relative;margin-top:160px}.fw-feature-main{grid-column:2;grid-row:1}.fw-feature-main .fw-feature-section:first-of-type{margin-top:190px}}
+@media(max-width:600px){.fw-feature-layout{grid-template-columns:95px minmax(0,1fr);gap:13px}.fw-feature-trailer{grid-column:1/-1;grid-row:auto;margin:0}.fw-feature-main .fw-feature-section:first-of-type{margin-top:0}.fw-feature-title{font-size:28px}.fw-full-actions button{padding:10px;font-size:12px}.fw-feature-cast{grid-template-columns:repeat(3,minmax(0,1fr))}}
 </style><script id="film60Script">
 (()=>{
 'use strict';
@@ -3502,7 +3529,7 @@ function shopOpen(x,storesOnly=false,fullPage=false){
  if(!shopView)savedScroll=window.scrollY;
  shopView={id:x.id,storesOnly,fullPage};shelf.hidden=true;shopPanel.hidden=false;
  document.getElementById('wishlist').classList.add('fw-detail-mode');
- const q=encodeURIComponent([x.title,x.year,x.format].filter(Boolean).join(' '));
+ const q=encodeURIComponent([x.title,x.format].filter(Boolean).join(' '));
  const poster=x.poster&&/^https:\/\//.test(x.poster)?'<img class="fw-shop-poster" src="'+esc(x.poster)+'" alt="Filmposter">':'<div class="fw-shop-poster fw-shop-poster-empty">🎬</div>';
  const back='<button type="button" class="fw-shop-back">← '+(storesOnly?'Terug naar film':fullPage?'Terug naar filmoverzicht':'Terug naar Filmwinkel')+'</button>';
  const heading='<div class="fw-shop-head">'+poster+'<div><span class="fw-shop-kicker">DE FILMWINKEL</span><h2>'+esc(x.title)+'</h2><p>'+esc([x.year,x.format].filter(Boolean).join(' · '))+'</p></div></div>';
@@ -3510,13 +3537,10 @@ function shopOpen(x,storesOnly=false,fullPage=false){
  shopPanel.querySelector('.fw-shop-back').onclick=()=>storesOnly?shopOpen(x,false,true):fullPage?shopOpen(x,false,false):shopBack();
  const body=shopPanel.querySelector('#fwShopBody');
  if(fullPage){
-  const match=(typeof DATA!=='undefined'&&Array.isArray(DATA.films))?DATA.films.find(f=>String(f.title||'').toLocaleLowerCase('nl-NL')===String(x.title).toLocaleLowerCase('nl-NL')&&(!x.year||String(f.year)===String(x.year))):null;
-  const f=match||{};
-  const val=v=>v===null||v===undefined||v===''?'–':esc(v);
-  const posterBig=x.poster&&/^https:\/\//.test(x.poster)?'<img src="'+esc(x.poster)+'" alt="Filmposter">':'<div class="fw-shop-poster-empty">🎬</div>';
-  body.innerHTML='<div class="film-detail-grid fw-full-film"><div class="detail-poster-column"><div class="poster fw-full-poster">'+posterBig+'</div></div><div class="details"><div class="film-kicker">FILMDETAILS / DE FILMWINKEL</div><h2>'+esc(x.title)+' <span class="film-year">('+val(x.year)+')</span></h2><div class="meta">'+(f.runtime?esc(f.runtime)+' min<br>':'')+(f.director?esc(f.director)+'<br>':'')+(f.genres?esc(f.genres):'')+'</div><div class="film-rating-row"><div class="stat"><strong>'+val(f.rating)+'</strong><span>Mijn rating</span></div><div class="stat"><strong>'+val(f.imdb)+'</strong><span>IMDb</span></div><div class="stat"><strong>'+val(f.letterboxd)+'</strong><span>Letterboxd</span></div></div><div class="fw-full-actions"><button type="button" data-buy>Waar te koop?</button><button type="button" data-return>Terug naar Filmwinkel</button></div></div></div><div class="fw-full-sections"><section class="panel"><h3>Over de film</h3><p>'+esc(x.notes||f.overview||f.plot||'Er is nog geen filmbeschrijving beschikbaar.')+'</p></section>'+(f.director?'<section class="panel"><h3>🎥 Regisseur</h3><p>'+esc(f.director)+'</p></section>':'')+(f.cast?'<section class="panel"><h3>Acteurs</h3><p>'+esc(Array.isArray(f.cast)?f.cast.join(', '):f.cast)+'</p></section>':'')+'</div>';
+  body.innerHTML='<div class="fw-feature-layout"><div class="fw-feature-poster">'+poster+'</div><div class="fw-feature-main"><div class="film-kicker">DE FILMWINKEL · FILMPAGINA</div><h2 class="fw-feature-title">'+esc(x.title)+(x.year?' <span>('+esc(x.year)+')</span>':'')+'</h2><div class="fw-full-actions"><button type="button" data-buy>Waar te koop?</button><button type="button" data-return>Terug naar Filmwinkel</button></div><section class="fw-feature-section"><h3>Over de film</h3><p data-overview>Filmgegevens ophalen via TMDB…</p></section><section class="fw-feature-section"><h3>Regisseur</h3><div data-director>Wordt opgehaald…</div></section><section class="fw-feature-section"><h3>Acteurs</h3><div class="fw-feature-cast" data-cast>Worden opgehaald…</div></section></div><aside class="fw-feature-trailer"><h3>Trailer</h3><div class="fw-feature-video" data-trailer>Trailer wordt opgehaald…</div></aside></div>';
   body.querySelector('[data-buy]').onclick=()=>shopOpen(x,true,true);
   body.querySelector('[data-return]').onclick=shopBack;
+  loadShopMetadata(x,body);
  }else if(!storesOnly){
   body.innerHTML='<div class="fw-shop-choice"><button type="button" data-page>Naar filmpagina</button><button type="button" data-buy>Waar te koop?</button></div><p class="fw-shop-help">Bekijk de filmpagina of zoek naar deze uitgave bij verschillende winkels.</p>';
   body.querySelector('[data-buy]').onclick=()=>shopOpen(x,true,false);
@@ -3525,6 +3549,41 @@ function shopOpen(x,storesOnly=false,fullPage=false){
   body.innerHTML='<h3 class="fw-shop-subtitle">Waar te koop?</h3><p class="fw-shop-help">Zoek bij deze winkels naar de film. Prijzen en beschikbaarheid worden niet live gecontroleerd. Met de terugknop van je browser keer je na een winkelbezoek terug.</p><div class="fw-shop-stores">'+stores.map(([name,url,logo])=>'<a class="fw-shop-store" href="'+esc(url+q+(name==='Marktplaats.nl'?'/':''))+'"><img src="'+esc(logo)+'" alt="" loading="lazy"><strong>'+esc(name)+'</strong><span>Bekijk aanbod ↗</span></a>').join('')+'</div>';
  }
  window.scrollTo({top:0,behavior:'instant'});
+}
+
+const fwMetadataCache=new Map();
+function fwProfileImage(person){
+ const path=String(person?.profile_path||'');
+ return path.startsWith('/') && /\\.(jpg|jpeg|png|webp)$/i.test(path)?'https://image.tmdb.org/t/p/w185'+path:'';
+}
+async function loadShopMetadata(x,body){
+ const overview=body.querySelector('[data-overview]'),director=body.querySelector('[data-director]'),cast=body.querySelector('[data-cast]'),trailer=body.querySelector('[data-trailer]');
+ const valid=()=>shopView?.id===x.id&&shopView.fullPage&&body.isConnected;
+ try{
+  const cacheKey=x.title+'|'+(x.year||'');
+  if(!fwMetadataCache.has(cacheKey)){
+   const request=fetch(SUPABASE_URL+'/functions/v1/film-metadata',{
+    method:'POST',headers:{'apikey':SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({title:x.title,year:x.year||null})
+   }).then(async r=>{const data=await r.json().catch(()=>({}));if(!r.ok)throw Error(data.error||'HTTP '+r.status);return data});
+   fwMetadataCache.set(cacheKey,request);request.catch(()=>fwMetadataCache.delete(cacheKey));
+  }
+  const f=await fwMetadataCache.get(cacheKey);if(!valid())return;
+  overview.textContent=f.overview||x.notes||'Er is nog geen beschrijving beschikbaar.';
+  const d=f.director_profile;
+  director.innerHTML=d?.name?'<div class="fw-feature-person">'+(fwProfileImage(d)?'<img src="'+esc(fwProfileImage(d))+'" alt="" loading="lazy">':'')+'<strong>'+esc(d.name)+'</strong></div>':esc(f.director||'Nog niet bekend');
+  const people=Array.isArray(f.cast_profiles)&&f.cast_profiles.length?f.cast_profiles.slice(0,12):String(f.cast||'').split(/[,|;]/).map(name=>({name:name.trim()})).filter(a=>a.name).slice(0,12);
+  cast.innerHTML=people.length?people.map(a=>'<div class="fw-feature-actor">'+(fwProfileImage(a)?'<img src="'+esc(fwProfileImage(a))+'" alt="" loading="lazy">':'<div class="fw-feature-actor-empty">◈</div>')+'<strong>'+esc(a.name)+'</strong>'+(a.character?'<small>'+esc(a.character)+'</small>':'')+'</div>').join(''):'Geen acteurs beschikbaar.';
+  let key=String(f.youtube_key||f.trailer_key||'');
+  if(!/^[A-Za-z0-9_-]{11}$/.test(key)&&f.tmdb_id){
+   try{
+    const r=await fetch(SUPABASE_URL+'/functions/v1/film-trailers',{method:'POST',headers:{'apikey':SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:JSON.stringify({tmdb_id:f.tmdb_id})});
+    if(r.ok){const t=await r.json();key=String(t.youtube_key||'')}
+   }catch(e){}
+  }
+  if(!valid())return;
+  trailer.innerHTML=/^[A-Za-z0-9_-]{11}$/.test(key)?'<a href="https://www.youtube.com/watch?v='+encodeURIComponent(key)+'" target="_blank" rel="noopener noreferrer"><img src="https://img.youtube.com/vi/'+encodeURIComponent(key)+'/hqdefault.jpg" alt="Trailer voorbeeld"><span>▶ Trailer bekijken</span></a>':'<p>Geen trailer beschikbaar via TMDB.</p>';
+ }catch(e){if(!valid())return;overview.textContent=x.notes||'Filmgegevens tijdelijk niet beschikbaar.';director.textContent='Niet beschikbaar';cast.textContent='Niet beschikbaar';trailer.textContent='Trailer tijdelijk niet beschikbaar.'}
 }
 function render(){let list=items.slice(),filter=$('fwFilter').value,sort=$('fwSort').value;if(filter!=='all')list=list.filter(x=>x.priority===filter);list.sort((a,b)=>sort==='title'?a.title.localeCompare(b.title,'nl'):sort==='new'?String(b.created_at).localeCompare(String(a.created_at)):(prio[a.priority]??2)-(prio[b.priority]??2)||String(b.created_at).localeCompare(String(a.created_at)));shelf.replaceChildren();$('fwAdd').hidden=!admin();for(const el of [$('fwImport'),$('fwExport')])if(el)el.hidden=!admin();if(!list.length){const p=document.createElement('div');p.className='fw-empty';p.innerHTML='<strong>De etalage is nog leeg.</strong><p>Er staan nog geen films in deze selectie.</p>';shelf.append(p);return}for(const x of list){const card=document.createElement('article');card.className='fw-card';card.tabIndex=0;card.setAttribute('role','button');card.setAttribute('aria-label','Bekijk '+x.title);const pic=x.poster&&/^https:\/\//.test(x.poster)?'<img class="fw-poster" loading="lazy" alt="" src="'+esc(x.poster)+'">':'<div class="fw-placeholder">'+esc(x.title)+'</div>';const label=x.priority==='must'?'★★★ Absolute must-have':x.priority==='high'?'★★ Graag hebben':'★ Leuk om te hebben';card.innerHTML=pic+'<h3>'+esc(x.title)+(x.year?' ('+esc(x.year)+')':'')+'</h3><div class="fw-meta">'+esc(x.format)+'</div><span class="fw-ribbon">'+label+'</span>'+(x.price!=null?'<div class="fw-meta">Richtprijs: € '+Number(x.price).toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div>':'')+(x.shop?'<div class="fw-meta">Vindplaats: '+esc(x.shop)+'</div>':'')+(x.notes?'<p class="fw-note">'+esc(x.notes)+'</p>':'')+(admin()?'<div class="fw-card-actions"><button type="button" data-edit>✎ Bewerken</button><button type="button" data-bought>✓ Gekocht</button><button type="button" data-delete>Verwijderen</button></div>':'');card.onclick=e=>{if(!e.target.closest('button'))shopOpen(x)};card.onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&e.target===card){e.preventDefault();shopOpen(x)}};if(admin()){card.querySelector('[data-edit]').onclick=()=>open(x);card.querySelector('[data-bought]').onclick=()=>remove(x,true);card.querySelector('[data-delete]').onclick=()=>remove(x,false)}shelf.append(card)}}
 new MutationObserver(()=>render()).observe($('adminToggle'),{childList:true});
