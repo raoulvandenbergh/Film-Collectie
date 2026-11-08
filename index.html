@@ -2394,7 +2394,9 @@ function setAdminUI(){
  document.getElementById('adminSignedIn').hidden=!signedIn;
  document.getElementById('adminSignedOut').hidden=signedIn;
  document.getElementById('adminToggle').textContent=signedIn?'✓ Beheerder':'Beheerder inloggen';
- if(typeof updateDiary==='function')updateDiary();
+ // De toevoegknop altijd eerst herstellen; een fout in de kijkgeschiedenis mag hem niet verbergen.
+ document.getElementById('addFilmButton').style.display=signedIn?'inline-block':'none';
+ try { if(typeof updateDiary==='function')updateDiary(); } catch(err) { console.warn('Kijkgeschiedenis kon niet worden bijgewerkt:',err); }
  document.getElementById('addFilmButton').style.display=signedIn?'inline-block':'none';document.getElementById('syncFilmIdsButton').style.display=signedIn?'inline-block':'none';document.getElementById('imdbPreviewButton').style.display=signedIn?'inline-block':'none';document.getElementById('tmdbSelectedSaveButton').style.display=signedIn?'inline-block':'none';const saveImdb=document.getElementById('imdbSaveButton');saveImdb.style.display=signedIn&&imdbPreviewApproved?'inline-block':'none';if(!signedIn){imdbPreviewApproved=false;saveImdb.disabled=true;}if(!signedIn)document.getElementById('syncFilmIdsResult').hidden=true;for(const id of ['editFilmButton','deleteFilmButton'])document.getElementById(id).style.display=signedIn&&activeDetailId>=0?'inline-block':'none';
  for(const id of ['changeFilmPoster','spotifyEditLink']){const el=document.getElementById(id);if(el){el.hidden=!signedIn;el.style.display=signedIn?'':'none';}}
  watchButton.disabled=!signedIn;watchButton.style.opacity=signedIn?'1':'.55';watchButton.style.cursor=signedIn?'pointer':'not-allowed';watchButton.title=signedIn?'Registreer een nieuwe kijkbeurt':'Log in als beheerder om een kijkbeurt toe te voegen';
