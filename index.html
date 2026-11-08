@@ -3559,31 +3559,62 @@ function fwProfileImage(person){
 async function loadShopMetadata(x,body){
  const overview=body.querySelector('[data-overview]'),director=body.querySelector('[data-director]'),cast=body.querySelector('[data-cast]'),trailer=body.querySelector('[data-trailer]');
  const valid=()=>shopView?.id===x.id&&shopView.fullPage&&body.isConnected;
+ const headers={'apikey':SUPABASE_PUBLISHABLE_KEY,'Authorization':'Bearer '+SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'};
+ async function metadata(payload){
+  const r=await fetch(SUPABASE_URL+'/functions/v1/film-metadata',{method:'POST',headers,body:JSON.stringify(payload)});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw Error(d.error||'HTTP '+r.status);
+  return d;
+ }
  try{
   const cacheKey=x.title+'|'+(x.year||'');
   if(!fwMetadataCache.has(cacheKey)){
-   const request=fetch(SUPABASE_URL+'/functions/v1/film-metadata',{
-    method:'POST',headers:{'apikey':SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},
-    body:JSON.stringify({title:x.title,year:x.year||null})
-   }).then(async r=>{const data=await r.json().catch(()=>({}));if(!r.ok)throw Error(data.error||'HTTP '+r.status);return data});
-   fwMetadataCache.set(cacheKey,request);request.catch(()=>fwMetadataCache.delete(cacheKey));
+   const job=(async()=>{
+    // Eerste verzoek zoekt de film; tweede verzoek haalt cast/crew op met de echte TMDB-ID.
+    const found=await metadata({title:x.title,year:x.year?Number(x.year):null});
+    const tmdbId=Number(found.tmdb_id||found.tmdbId||found.id||found.movie?.id);
+    if(!Number.isSafeInteger(tmdbId)||tmdbId<=0)return found;
+    const detailed=await metadata({tmdb_id:tmdbId}).catch(()=>({}));
+    return {...found,...detailed,tmdb_id:tmdbId,
+      cast_profiles:detailed.cast_profiles||found.cast_profiles,
+      director_profile:detailed.director_profile||found.director_profile};
+   })();
+   fwMetadataCache.set(cacheKey,job);job.catch(()=>fwMetadataCache.delete(cacheKey));
   }
   const f=await fwMetadataCache.get(cacheKey);if(!valid())return;
-  overview.textContent=f.overview||x.notes||'Er is nog geen beschrijving beschikbaar.';
+  overview.textContent=f.overview||f.description||f.plot||x.notes||'Er is nog geen beschrijving beschikbaar.';
   const d=f.director_profile;
   director.innerHTML=d?.name?'<div class="fw-feature-person">'+(fwProfileImage(d)?'<img src="'+esc(fwProfileImage(d))+'" alt="" loading="lazy">':'')+'<strong>'+esc(d.name)+'</strong></div>':esc(f.director||'Nog niet bekend');
   const people=Array.isArray(f.cast_profiles)&&f.cast_profiles.length?f.cast_profiles.slice(0,12):String(f.cast||'').split(/[,|;]/).map(name=>({name:name.trim()})).filter(a=>a.name).slice(0,12);
   cast.innerHTML=people.length?people.map(a=>'<div class="fw-feature-actor">'+(fwProfileImage(a)?'<img src="'+esc(fwProfileImage(a))+'" alt="" loading="lazy">':'<div class="fw-feature-actor-empty">◈</div>')+'<strong>'+esc(a.name)+'</strong>'+(a.character?'<small>'+esc(a.character)+'</small>':'')+'</div>').join(''):'Geen acteurs beschikbaar.';
-  let key=String(f.youtube_key||f.trailer_key||'');
-  if(!/^[A-Za-z0-9_-]{11}$/.test(key)&&f.tmdb_id){
-   try{
-    const r=await fetch(SUPABASE_URL+'/functions/v1/film-trailers',{method:'POST',headers:{'apikey':SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:JSON.stringify({tmdb_id:f.tmdb_id})});
-    if(r.ok){const t=await r.json();key=String(t.youtube_key||'')}
-   }catch(e){}
+  let key=String(f.youtube_key||f.trailer_key||f.trailer?.youtube_key||'');
+  // De bestaande trailerfunctie accepteert een Supabase film_id, geen TMDB-ID.
+  // Zoek daarom eerst of deze verlanglijstfilm al in de collectie staat.
+  if(!/^[A-Za-z0-9_-]{11}$/.test(key)){
+   const match=DATA.films.find(a=>Number(a._tmdbId)===Number(f.tmdb_id)&&f.tmdb_id)||
+    DATA.films.find(a=>String(a.title||'').toLocaleLowerCase('nl')===String(x.title).toLocaleLowerCase('nl')&&Number(a.year)===Number(x.year));
+   const idx=match?DATA.films.indexOf(match):-1;
+   const filmId=idx>=0?window.__supabaseFilmIds?.[idx]:null;
+   if(filmId!==undefined&&filmId!==null){
+    try{
+     const r=await fetch(SUPABASE_URL+'/functions/v1/film-trailers',{method:'POST',headers,body:JSON.stringify({film_id:filmId})});
+     if(r.ok){const t=await r.json();key=String(t.youtube_key||'')}
+    }catch(e){}
+   }
   }
   if(!valid())return;
-  trailer.innerHTML=/^[A-Za-z0-9_-]{11}$/.test(key)?'<a href="https://www.youtube.com/watch?v='+encodeURIComponent(key)+'" target="_blank" rel="noopener noreferrer"><img src="https://img.youtube.com/vi/'+encodeURIComponent(key)+'/hqdefault.jpg" alt="Trailer voorbeeld"><span>▶ Trailer bekijken</span></a>':'<p>Geen trailer beschikbaar via TMDB.</p>';
- }catch(e){if(!valid())return;overview.textContent=x.notes||'Filmgegevens tijdelijk niet beschikbaar.';director.textContent='Niet beschikbaar';cast.textContent='Niet beschikbaar';trailer.textContent='Trailer tijdelijk niet beschikbaar.'}
+  if(/^[A-Za-z0-9_-]{11}$/.test(key)){
+   trailer.innerHTML='<a href="https://www.youtube.com/watch?v='+encodeURIComponent(key)+'" target="_blank" rel="noopener noreferrer"><img src="https://img.youtube.com/vi/'+encodeURIComponent(key)+'/hqdefault.jpg" alt="Trailer voorbeeld"><span>▶ Trailer bekijken</span></a>';
+  }else{
+   trailer.innerHTML='<p>Geen trailer beschikbaar via de huidige koppeling.</p>';
+  }
+ }catch(e){
+  if(!valid())return;
+  overview.textContent=x.notes||'Filmgegevens tijdelijk niet beschikbaar.';
+  director.textContent='Niet beschikbaar';cast.textContent='Niet beschikbaar';
+  trailer.textContent='Trailer tijdelijk niet beschikbaar.';
+  console.warn('Filmwinkel TMDB:',e);
+ }
 }
 function render(){let list=items.slice(),filter=$('fwFilter').value,sort=$('fwSort').value;if(filter!=='all')list=list.filter(x=>x.priority===filter);list.sort((a,b)=>sort==='title'?a.title.localeCompare(b.title,'nl'):sort==='new'?String(b.created_at).localeCompare(String(a.created_at)):(prio[a.priority]??2)-(prio[b.priority]??2)||String(b.created_at).localeCompare(String(a.created_at)));shelf.replaceChildren();$('fwAdd').hidden=!admin();for(const el of [$('fwImport'),$('fwExport')])if(el)el.hidden=!admin();if(!list.length){const p=document.createElement('div');p.className='fw-empty';p.innerHTML='<strong>De etalage is nog leeg.</strong><p>Er staan nog geen films in deze selectie.</p>';shelf.append(p);return}for(const x of list){const card=document.createElement('article');card.className='fw-card';card.tabIndex=0;card.setAttribute('role','button');card.setAttribute('aria-label','Bekijk '+x.title);const pic=x.poster&&/^https:\/\//.test(x.poster)?'<img class="fw-poster" loading="lazy" alt="" src="'+esc(x.poster)+'">':'<div class="fw-placeholder">'+esc(x.title)+'</div>';const label=x.priority==='must'?'★★★ Absolute must-have':x.priority==='high'?'★★ Graag hebben':'★ Leuk om te hebben';card.innerHTML=pic+'<h3>'+esc(x.title)+(x.year?' ('+esc(x.year)+')':'')+'</h3><div class="fw-meta">'+esc(x.format)+'</div><span class="fw-ribbon">'+label+'</span>'+(x.price!=null?'<div class="fw-meta">Richtprijs: € '+Number(x.price).toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div>':'')+(x.shop?'<div class="fw-meta">Vindplaats: '+esc(x.shop)+'</div>':'')+(x.notes?'<p class="fw-note">'+esc(x.notes)+'</p>':'')+(admin()?'<div class="fw-card-actions"><button type="button" data-edit>✎ Bewerken</button><button type="button" data-bought>✓ Gekocht</button><button type="button" data-delete>Verwijderen</button></div>':'');card.onclick=e=>{if(!e.target.closest('button'))shopOpen(x)};card.onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&e.target===card){e.preventDefault();shopOpen(x)}};if(admin()){card.querySelector('[data-edit]').onclick=()=>open(x);card.querySelector('[data-bought]').onclick=()=>remove(x,true);card.querySelector('[data-delete]').onclick=()=>remove(x,false)}shelf.append(card)}}
 new MutationObserver(()=>render()).observe($('adminToggle'),{childList:true});
