@@ -3514,7 +3514,7 @@ function status(t){$('fwStatus').textContent=t}
 function serverHeaders(token){return {'apikey':SUPABASE_PUBLISHABLE_KEY,'Authorization':'Bearer '+(token||SUPABASE_PUBLISHABLE_KEY),'Content-Type':'application/json','Prefer':'return=representation'}}
 async function fetchRemote(){try{const r=await fetch(SUPABASE_URL+'/rest/v1/'+TABLE+'?select=*&order=created_at.desc',{headers:serverHeaders()});if(!r.ok)throw Error('HTTP '+r.status);const rows=await r.json();if(!Array.isArray(rows))throw Error('Ongeldige gegevens');remoteReady=true;remoteError=false;items=rows.map(x=>({id:x.id,title:x.title,year:x.year,format:x.format,priority:x.priority,price:x.price,shop:x.shop,poster:x.poster,notes:x.notes,created_at:x.created_at}));store();render();status('Filmwinkel gesynchroniseerd met Supabase.');}catch(e){remoteReady=false;remoteError=true;status('De Filmwinkel bewaart wensen voorlopig op dit apparaat. Voor synchronisatie is de Supabase-tabel nodig.')}}
 async function writeRemote(item,method){if(!remoteReady)return false;try{const token=await adminAccessToken();const path='/rest/v1/'+TABLE+(method==='DELETE'?'?id=eq.'+encodeURIComponent(item.id):method==='PATCH'?'?id=eq.'+encodeURIComponent(item.id):'');const payload={id:item.id,title:item.title,year:item.year,format:item.format,priority:item.priority,price:item.price,shop:item.shop,poster:item.poster,notes:item.notes,created_at:item.created_at};const r=await fetch(SUPABASE_URL+path,{method,headers:serverHeaders(token),...(method==='DELETE'?{}:{body:JSON.stringify(payload)})});if(!r.ok){const err=await r.json().catch(()=>({}));throw Error(err.message||'HTTP '+r.status)}return true}catch(e){status('Supabase opslaan mislukt: '+e.message+' Je wijziging is alleen lokaal bewaard.');return false}}
-let shopView=null, savedScroll=0;
+let shopView=null, savedScroll=0, shopOrigin="shelf";
 const shopPanel=document.createElement('section');shopPanel.id='fwShopPanel';shopPanel.hidden=true;shelf.after(shopPanel);
 const stores=[
  ['Bol.com','https://www.bol.com/nl/nl/s/?searchtext=','https://www.google.com/s2/favicons?domain=bol.com&sz=128'],
@@ -3524,33 +3524,71 @@ const stores=[
  ['Vinted.nl','https://www.vinted.nl/catalog?search_text=','https://www.google.com/s2/favicons?domain=vinted.nl&sz=128']
 ];
 function admin(){return window.__filmAdminSignedIn===true}
-function shopBack(){shopView=null;shopPanel.hidden=true;shelf.hidden=false;document.getElementById('wishlist').classList.remove('fw-detail-mode');window.scrollTo(0,savedScroll)}
-function shopOpen(x,storesOnly=false,fullPage=false){
+function shopBack(){shopOrigin='shelf';shopView=null;shopPanel.hidden=true;shelf.hidden=false;document.getElementById('wishlist').classList.remove('fw-detail-mode');window.scrollTo(0,savedScroll)}
+function shopOpen(x,storesOnly=false,fullPage=false,origin=null){
  if(!shopView)savedScroll=window.scrollY;
+ if(storesOnly)shopOrigin=origin||(shopView?.fullPage?'film':'shelf');
  shopView={id:x.id,storesOnly,fullPage};shelf.hidden=true;shopPanel.hidden=false;
  document.getElementById('wishlist').classList.add('fw-detail-mode');
  const q=encodeURIComponent([x.title,x.format].filter(Boolean).join(' '));
  const poster=x.poster&&/^https:\/\//.test(x.poster)?'<img class="fw-shop-poster" src="'+esc(x.poster)+'" alt="Filmposter">':'<div class="fw-shop-poster fw-shop-poster-empty">🎬</div>';
- const back='<button type="button" class="fw-shop-back">← '+(storesOnly?'Terug naar film':fullPage?'Terug naar filmoverzicht':'Terug naar Filmwinkel')+'</button>';
+ const back='<button type="button" class="fw-shop-back">← '+(storesOnly?(shopOrigin==='film'?'Terug naar film':'Terug naar Filmwinkel'):fullPage?'Terug naar Filmwinkel':'Terug naar Filmwinkel')+'</button>';
  const heading='<div class="fw-shop-head">'+poster+'<div><span class="fw-shop-kicker">DE FILMWINKEL</span><h2>'+esc(x.title)+'</h2><p>'+esc([x.year,x.format].filter(Boolean).join(' · '))+'</p></div></div>';
  shopPanel.innerHTML=back+(fullPage?'':heading)+'<div id="fwShopBody"></div>';
- shopPanel.querySelector('.fw-shop-back').onclick=()=>storesOnly?shopOpen(x,false,true):fullPage?shopOpen(x,false,false):shopBack();
+ shopPanel.querySelector('.fw-shop-back').onclick=()=>storesOnly?(shopOrigin==='film'?shopOpen(x,false,true):shopBack()):shopBack();
  const body=shopPanel.querySelector('#fwShopBody');
  if(fullPage){
   body.innerHTML='<div class="fw-feature-layout"><div class="fw-feature-poster">'+poster+'</div><div class="fw-feature-main"><div class="film-kicker">DE FILMWINKEL · FILMPAGINA</div><h2 class="fw-feature-title">'+esc(x.title)+(x.year?' <span>('+esc(x.year)+')</span>':'')+'</h2><div class="fw-full-actions"><button type="button" data-buy>Waar te koop?</button><button type="button" data-return>Terug naar Filmwinkel</button></div><section class="fw-feature-section"><h3>Over de film</h3><p data-overview>Filmgegevens ophalen via TMDB…</p></section><section class="fw-feature-section"><h3>Regisseur</h3><div data-director>Wordt opgehaald…</div></section><section class="fw-feature-section"><h3>Acteurs</h3><div class="fw-feature-cast" data-cast>Worden opgehaald…</div></section></div><aside class="fw-feature-trailer"><h3>Trailer</h3><div class="fw-feature-video" data-trailer>Trailer wordt opgehaald…</div></aside></div>';
-  body.querySelector('[data-buy]').onclick=()=>shopOpen(x,true,false);
+  body.querySelector('[data-buy]').onclick=()=>shopOpen(x,true,false,'film');
   body.querySelector('[data-return]').onclick=shopBack;
+  body.querySelector('[data-poster]')?.addEventListener('click',()=>chooseShopPoster(x));
   loadShopMetadata(x,body);
  }else if(!storesOnly){
   body.innerHTML='<div class="fw-shop-choice"><button type="button" data-page>Naar filmpagina</button><button type="button" data-buy>Waar te koop?</button></div><p class="fw-shop-help">Bekijk de filmpagina of zoek naar deze uitgave bij verschillende winkels.</p>';
-  body.querySelector('[data-buy]').onclick=()=>shopOpen(x,true,false);
+  body.querySelector('[data-buy]').onclick=()=>shopOpen(x,true,false,'shelf');
   body.querySelector('[data-page]').onclick=()=>shopOpen(x,false,true);
  }else{
-  body.innerHTML='<h3 class="fw-shop-subtitle">Waar te koop?</h3><p class="fw-shop-help">Zoek bij deze winkels naar de film. Prijzen en beschikbaarheid worden niet live gecontroleerd. Met de terugknop van je browser keer je na een winkelbezoek terug.</p><div class="fw-shop-stores">'+stores.map(([name,url,logo])=>'<a class="fw-shop-store" href="'+esc(url+q+(name==='Marktplaats.nl'?'/':''))+'"><img src="'+esc(logo)+'" alt="" loading="lazy"><strong>'+esc(name)+'</strong><span>Bekijk aanbod ↗</span></a>').join('')+'</div>';
+  body.innerHTML='<h3 class="fw-shop-subtitle">Waar te koop?</h3><p class="fw-shop-help">Zoek bij deze winkels naar de film. Prijzen en beschikbaarheid worden niet live gecontroleerd. De winkels openen in een nieuw tabblad. Je Filmwinkel blijft hier open.</p><div class="fw-shop-stores">'+stores.map(([name,url,logo])=>'<a class="fw-shop-store" href="'+esc(url+q+(name==='Marktplaats.nl'?'/':''))+'"><img src="'+esc(logo)+'" alt="" loading="lazy"><strong>'+esc(name)+'</strong><span>Bekijk aanbod ↗</span></a>').join('')+'</div>';
  }
  window.scrollTo({top:0,behavior:'instant'});
 }
 
+async function chooseShopPoster(x){
+ if(!admin())return;
+ let overlay=document.getElementById('fwPosterPicker');
+ if(overlay)overlay.remove();
+ overlay=document.createElement('div');overlay.id='fwPosterPicker';overlay.className='fw-poster-picker';
+ overlay.innerHTML='<div class="fw-poster-picker-box" role="dialog" aria-modal="true" aria-label="Kies een filmposter"><div class="fw-poster-picker-header"><h3>Kies een andere poster</h3><button type="button" data-close>✕ Sluiten</button></div><p class="fw-poster-picker-status">Posters ophalen bij TMDB…</p><div class="fw-poster-picker-grid"></div></div>';
+ document.body.append(overlay);
+ const close=()=>overlay.remove();
+ overlay.querySelector('[data-close]').onclick=close;
+ overlay.addEventListener('click',e=>{if(e.target===overlay)close()});
+ const msg=overlay.querySelector('.fw-poster-picker-status'),grid=overlay.querySelector('.fw-poster-picker-grid');
+ try{
+  const response=await fetch(SUPABASE_URL+'/functions/v1/filmwinkel-metadata',{method:'POST',headers:{'apikey':SUPABASE_PUBLISHABLE_KEY,'Authorization':'Bearer '+SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:JSON.stringify({title:x.title,year:x.year||null,include_posters:true})});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw Error(data.error||'HTTP '+response.status);
+  if(!overlay.isConnected)return;
+  const posters=Array.isArray(data.posters)?data.posters:[];
+  if(!posters.length){msg.textContent='Geen alternatieve posters gevonden.';return}
+  msg.textContent='Kies de poster die het beste bij jouw gewenste uitgave past.';
+  for(const path of posters){
+   if(!/^\/[\w/-]+\.(?:jpg|jpeg|png|webp)$/i.test(path))continue;
+   const url='https://image.tmdb.org/t/p/w500'+path;
+   const button=document.createElement('button');button.type='button';button.className='fw-poster-choice';
+   const img=document.createElement('img');img.src='https://image.tmdb.org/t/p/w185'+path;img.alt='Alternatieve filmposter';img.loading='lazy';button.append(img);
+   button.onclick=async()=>{
+    const changed={...x,poster:url};
+    items=items.map(item=>item.id===x.id?changed:item);store();render();
+    close();shopOpen(changed,false,true);
+    const ok=await writeRemote(changed,'PATCH');
+    if(ok)status('Nieuwe poster opgeslagen in Filmwinkel.');
+    else if(!remoteReady)status('Poster alleen lokaal opgeslagen; synchronisatie niet beschikbaar.');
+   };
+   grid.append(button);
+  }
+ }catch(err){if(overlay.isConnected)msg.textContent='Posters ophalen mislukt: '+err.message}
+}
 const fwMetadataCache=new Map();
 function fwProfileImage(person){
  const path=String(person?.profile_path||'');
@@ -3628,4 +3666,16 @@ $('fwExport').onclick=()=>{const payload={format:'raouls-filmwinkel',version:1,e
 $('fwImport').onclick=()=>$('fwImportFile').click();$('fwImportFile').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{const data=JSON.parse(await f.text());if(data.format!=='raouls-filmwinkel'||!Array.isArray(data.items))throw Error('Geen geldig Filmwinkel-bestand');if(!confirm('Verlanglijst importeren? Bestaande wensen met hetzelfde ID worden bijgewerkt.'))return;const map=new Map(items.map(x=>[x.id,x]));for(const x of data.items){if(!x||typeof x.title!=='string'||!x.title.trim())continue;const safe={id:String(x.id||id()),title:x.title.slice(0,180),year:Number(x.year)||null,format:String(x.format||'Blu-ray'),priority:prio[x.priority]!==undefined?x.priority:'normal',price:x.price==null?null:Number(x.price),shop:String(x.shop||''),poster:String(x.poster||''),notes:String(x.notes||''),created_at:String(x.created_at||new Date().toISOString())};map.set(safe.id,safe)}items=[...map.values()];store();render();status('Verlanglijst geïmporteerd op dit apparaat. Synchronisatie van geïmporteerde wensen vereist een vervolgstap.')}catch(err){status('Importeren mislukt: '+err.message)}finally{e.target.value=''}};
 items=readLocal();render();fetchRemote();
 })();
-</script><style id="film62Styles">.fw-tmdb-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 15px}.fw-tmdb-actions button{border:1px solid #b99b60;background:#344338;color:#f3dca7;border-radius:5px;padding:10px;cursor:pointer}.fw-tmdb-actions span{font-size:12px;color:#e0c99b}.fw-tmdb-results[hidden]{display:none!important}.fw-tmdb-results{margin:8px 0 17px}.fw-tmdb-result{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:#24382f;border:1px solid #a78d58;border-radius:7px;padding:10px;color:#ead7ae;cursor:pointer}.fw-tmdb-result:hover{border-color:#e6c27a;background:#30453a}.fw-tmdb-result img{width:62px;aspect-ratio:2/3;object-fit:cover;border-radius:3px}.fw-tmdb-result-info{display:flex;flex-direction:column;gap:7px}.fw-tmdb-result-info strong{font:20px Georgia,serif}.fw-tmdb-result-info small{color:#c6b99c;font-size:12px}</style></body></html>
+</script><style id="film62Styles">.fw-tmdb-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 15px}.fw-tmdb-actions button{border:1px solid #b99b60;background:#344338;color:#f3dca7;border-radius:5px;padding:10px;cursor:pointer}.fw-tmdb-actions span{font-size:12px;color:#e0c99b}.fw-tmdb-results[hidden]{display:none!important}.fw-tmdb-results{margin:8px 0 17px}.fw-tmdb-result{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:#24382f;border:1px solid #a78d58;border-radius:7px;padding:10px;color:#ead7ae;cursor:pointer}.fw-tmdb-result:hover{border-color:#e6c27a;background:#30453a}.fw-tmdb-result img{width:62px;aspect-ratio:2/3;object-fit:cover;border-radius:3px}.fw-tmdb-result-info{display:flex;flex-direction:column;gap:7px}.fw-tmdb-result-info strong{font:20px Georgia,serif}.fw-tmdb-result-info small{color:#c6b99c;font-size:12px}</style><style id="fwPosterChoiceStyles">
+.fw-change-poster{margin-top:12px;width:100%;padding:9px 8px;background:#20372d;color:#f0d8ad;border:1px solid #987e54;border-radius:7px;cursor:pointer;font-size:12px}
+.fw-poster-picker{position:fixed;inset:0;z-index:30000;background:#000c;display:grid;place-items:center;padding:15px}
+.fw-poster-picker-box{width:min(850px,100%);max-height:90vh;overflow:auto;background:#102720;border:1px solid #b39561;border-radius:13px;padding:22px;color:#f1e5d0}
+.fw-poster-picker-header{display:flex;align-items:center;justify-content:space-between;gap:15px}
+.fw-poster-picker-header h3{font:normal 27px Georgia,serif;margin:0}
+.fw-poster-picker-header button{padding:9px;border:1px solid #ae8b5a;background:#263e34;color:#f3ddb5;border-radius:7px;cursor:pointer}
+.fw-poster-picker-status{color:#c8c5b7}
+.fw-poster-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:12px;margin-top:15px}
+.fw-poster-choice{border:2px solid transparent;background:none;border-radius:8px;padding:3px;cursor:pointer}
+.fw-poster-choice:hover,.fw-poster-choice:focus-visible{border-color:#e7bd74}
+.fw-poster-choice img{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:5px}
+</style></body></html>
