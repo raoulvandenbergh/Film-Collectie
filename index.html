@@ -996,7 +996,28 @@ function navigateBackFromDetail(){
   history.back();
  }else show(target);
 }
+/* iPad/tablet navigation: animate the actual view swap, not only the new page. */
+let rcViewTransitionBusy=false;
 function show(v){
+ const current=document.querySelector('.view.active')?.id;
+ if(current===v || !document.startViewTransition || rcViewTransitionBusy){
+  return showImmediate(v);
+ }
+ rcViewTransitionBusy=true;
+ document.documentElement.classList.add('rc-view-switching');
+ try{
+  const transition=document.startViewTransition(()=>showImmediate(v));
+  transition.finished.catch(()=>{}).finally(()=>{
+   rcViewTransitionBusy=false;
+   document.documentElement.classList.remove('rc-view-switching');
+  });
+ }catch(err){
+  rcViewTransitionBusy=false;
+  document.documentElement.classList.remove('rc-view-switching');
+  return showImmediate(v);
+ }
+}
+function showImmediate(v){
  const previous=document.querySelector('.view.active')?.id||lastHistoryView;
  
  if(!navigatingBrowserHistory&&previous!==v){
@@ -3717,6 +3738,23 @@ items=readLocal();render();fetchRemote();
   .movie:hover, .movie:hover .poster, .movie:focus-within .poster {
     transform: none !important;
   }
+}
+
+/* Real crossfade between views: works in Safari with View Transitions support. */
+@supports (view-transition-name: root) {
+ html.rc-view-switching::view-transition-old(root) {
+  animation: rc-old-view .24s ease-in both;
+ }
+ html.rc-view-switching::view-transition-new(root) {
+  animation: rc-new-view .30s ease-out both;
+ }
+ html.rc-view-switching .view.active { animation: none !important; }
+ @keyframes rc-old-view { from { opacity: 1; } to { opacity: 0; } }
+ @keyframes rc-new-view { from { opacity: 0; } to { opacity: 1; } }
+ @media (prefers-reduced-motion: reduce) {
+  html.rc-view-switching::view-transition-old(root) { animation-duration: .12s; }
+  html.rc-view-switching::view-transition-new(root) { animation-duration: .16s; }
+ }
 }
 </style>
 </body></html>
