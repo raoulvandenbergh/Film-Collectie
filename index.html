@@ -3771,4 +3771,29 @@ items=readLocal();render();fetchRemote();
 /* The View Transitions API remains the primary, smooth crossfade. */
 html.rc-view-switching .view.active { animation: none !important; }
 </style>
+<style id="rc-stable-content-transition">
+/* Keep the cinematic crossfade, but snapshot only the changing page.
+   The site header/navigation no longer gets faded or repainted. */
+@supports (view-transition-name: rc-content) {
+  html.rc-view-switching::view-transition-old(root),
+  html.rc-view-switching::view-transition-new(root) {
+    animation: none !important;
+  }
+  .view.active { view-transition-name: rc-content; }
+  html.rc-view-switching::view-transition-old(rc-content) {
+    animation: rc-content-out .22s ease-in both !important;
+  }
+  html.rc-view-switching::view-transition-new(rc-content) {
+    animation: rc-content-in .32s ease-out both !important;
+  }
+  @keyframes rc-content-out { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes rc-content-in { from { opacity: 0; } to { opacity: 1; } }
+  /* Prevent a second entrance animation fighting the crossfade. */
+  html.rc-view-switching .view.active { animation: none !important; }
+  @media (prefers-reduced-motion: reduce) {
+    html.rc-view-switching::view-transition-old(rc-content) { animation-duration: .12s !important; }
+    html.rc-view-switching::view-transition-new(rc-content) { animation-duration: .16s !important; }
+  }
+}
+</style>
 </body></html>
