@@ -3678,4 +3678,45 @@ items=readLocal();render();fetchRemote();
 .fw-poster-choice{border:2px solid transparent;background:none;border-radius:8px;padding:3px;cursor:pointer}
 .fw-poster-choice:hover,.fw-poster-choice:focus-visible{border-color:#e7bd74}
 .fw-poster-choice img{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:5px}
-</style></body></html>
+</style>
+<style id="rc-tablet-motion-20261110">
+/* Tablet motion compatibility: avoid fixed-background repaints on touch devices. */
+@media (hover: none) and (pointer: coarse) {
+  body { background-attachment: scroll !important; }
+  .movie:hover, .movie:hover .poster, .movie:focus-within .poster {
+    transform: none;
+  }
+  .movie:active .poster, .label-card:active, nav button:active {
+    filter: brightness(1.09);
+  }
+}
+/* Standard motion: retain the cinematic page entrance on iPad and desktop. */
+@media (prefers-reduced-motion: no-preference) {
+  .view.active {
+    animation: rc-tablet-page-enter .52s cubic-bezier(.2,.72,.25,1) both !important;
+  }
+  @keyframes rc-tablet-page-enter {
+    from { opacity: .25; transform: translate3d(0,14px,0); }
+    to { opacity: 1; transform: translate3d(0,0,0); }
+  }
+}
+/* Respect accessibility preferences without making navigation feel abrupt.
+   Overrides the earlier !important Film58 entrance animation. */
+@media (prefers-reduced-motion: reduce) {
+  .view.active {
+    animation: rc-tablet-reduced-fade .22s ease-out both !important;
+  }
+  @keyframes rc-tablet-reduced-fade {
+    from { opacity: .65; }
+    to { opacity: 1; }
+  }
+  /* Avoid zooming / moving poster cards when reduced motion is selected. */
+  .movie, .movie .poster, .label-card, nav button, button {
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease !important;
+  }
+  .movie:hover, .movie:hover .poster, .movie:focus-within .poster {
+    transform: none !important;
+  }
+}
+</style>
+</body></html>
