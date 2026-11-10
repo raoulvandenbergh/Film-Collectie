@@ -3573,7 +3573,7 @@ function shopOpen(x,storesOnly=false,fullPage=false,origin=null){
   body.querySelector('[data-buy]').onclick=()=>shopOpen(x,true,false,'shelf');
   body.querySelector('[data-page]').onclick=()=>shopOpen(x,false,true);
  }else{
-  body.innerHTML='<h3 class="fw-shop-subtitle">Waar te koop?</h3><p class="fw-shop-help">Zoek bij deze winkels naar de film. Prijzen en beschikbaarheid worden niet live gecontroleerd. De winkels openen in een nieuw tabblad. Je Filmwinkel blijft hier open.</p><div class="fw-shop-stores">'+stores.map(([name,url,logo])=>'<a class="fw-shop-store" href="'+esc(url+q+(name==='Marktplaats.nl'?'/':''))+'"><img src="'+esc(logo)+'" alt="" loading="lazy"><strong>'+esc(name)+'</strong><span>Bekijk aanbod ↗</span></a>').join('')+'</div>';
+  body.innerHTML='<h3 class="fw-shop-subtitle">Waar te koop?</h3><p class="fw-shop-help">Zoek bij deze winkels naar de film. Prijzen en beschikbaarheid worden niet live gecontroleerd. De winkels openen in een nieuw tabblad. Je Filmwinkel blijft hier open.</p><div class="fw-shop-stores">'+stores.map(([name,url,logo])=>'<a class="fw-shop-store" target="_blank" rel="noopener noreferrer" href="'+esc(url+q+(name==='Marktplaats.nl'?'/':''))+'"><img src="'+esc(logo)+'" alt="" loading="lazy"><strong>'+esc(name)+'</strong><span>Bekijk aanbod ↗</span></a>').join('')+'</div>';
  }
  window.scrollTo({top:0,behavior:'instant'});
 }
