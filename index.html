@@ -1004,6 +1004,17 @@ function navigateBackFromDetail(){
 let rcViewTransitionBusy=false;
 function show(v){
  const current=document.querySelector('.view.active')?.id;
+ // Switching between main navigation tabs should be immediate and stable.
+ // The page-entry transform and full-page View Transition used to overlap,
+ // causing the brief flash/jump visible on Mac and iPad.
+ const mainTabs=['collection','diary','statistics','wishlist','labels','vault'];
+ const isMainTabSwitch=current!==v && mainTabs.includes(current) && mainTabs.includes(v);
+ document.querySelectorAll('.view.rc-instant-tab').forEach(el=>el.classList.remove('rc-instant-tab'));
+ if(isMainTabSwitch){
+  const result=showImmediate(v);
+  document.getElementById(v)?.classList.add('rc-instant-tab');
+  return result;
+ }
  if(current===v || !document.startViewTransition || rcViewTransitionBusy){
   return showImmediate(v);
  }
@@ -3759,6 +3770,15 @@ items=readLocal();render();fetchRemote();
   html.rc-view-switching::view-transition-old(root) { animation-duration: .12s; }
   html.rc-view-switching::view-transition-new(root) { animation-duration: .16s; }
  }
+}
+</style>
+<style id="rc-main-tab-stability">
+/* Main tab switches: no double animation, vertical jump or flash.
+   Film-detail navigation still uses its existing smooth transitions. */
+.view.active.rc-instant-tab {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
 }
 </style>
 </body></html>
