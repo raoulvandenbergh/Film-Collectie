@@ -3761,38 +3761,27 @@ items=readLocal();render();fetchRemote();
  }
 }
 </style>
-<style id="rc-no-jump-fade">
-/* Keep the original page-to-page crossfade, without a second vertical
-   entrance animation that can make tab navigation briefly jump. */
-@media (prefers-reduced-motion: no-preference) {
-  .view.active { animation: rc-stable-fade .30s ease-out both !important; }
-}
-@keyframes rc-stable-fade { from { opacity: .35; } to { opacity: 1; } }
-/* The View Transitions API remains the primary, smooth crossfade. */
-html.rc-view-switching .view.active { animation: none !important; }
-</style>
-<style id="rc-stable-content-transition">
-/* Keep the cinematic crossfade, but snapshot only the changing page.
-   The site header/navigation no longer gets faded or repainted. */
+<style id="rc-clean-page-transitions">
+/* One transition system only: keep the smooth fade, but avoid two pages
+   appearing simultaneously (the ghosting seen on tab switches). */
+.view.active { animation:none !important; }
 @supports (view-transition-name: rc-content) {
+  .view.active { view-transition-name: rc-content; }
   html.rc-view-switching::view-transition-old(root),
   html.rc-view-switching::view-transition-new(root) {
-    animation: none !important;
+    animation:none !important;
   }
-  .view.active { view-transition-name: rc-content; }
   html.rc-view-switching::view-transition-old(rc-content) {
-    animation: rc-content-out .22s ease-in both !important;
+    animation:rc-page-out .16s ease-in both !important;
   }
   html.rc-view-switching::view-transition-new(rc-content) {
-    animation: rc-content-in .32s ease-out both !important;
+    animation:rc-page-in .18s ease-out .16s both !important;
   }
-  @keyframes rc-content-out { from { opacity: 1; } to { opacity: 0; } }
-  @keyframes rc-content-in { from { opacity: 0; } to { opacity: 1; } }
-  /* Prevent a second entrance animation fighting the crossfade. */
-  html.rc-view-switching .view.active { animation: none !important; }
-  @media (prefers-reduced-motion: reduce) {
-    html.rc-view-switching::view-transition-old(rc-content) { animation-duration: .12s !important; }
-    html.rc-view-switching::view-transition-new(rc-content) { animation-duration: .16s !important; }
+  @keyframes rc-page-out { from {opacity:1} to {opacity:0} }
+  @keyframes rc-page-in { from {opacity:0} to {opacity:1} }
+  @media (prefers-reduced-motion:reduce) {
+    html.rc-view-switching::view-transition-old(rc-content) { animation-duration:.10s !important; }
+    html.rc-view-switching::view-transition-new(rc-content) { animation-duration:.12s !important; animation-delay:.10s !important; }
   }
 }
 </style>
