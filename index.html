@@ -1000,26 +1000,37 @@ function navigateBackFromDetail(){
   history.back();
  }else show(target);
 }
-/* iPad/tablet navigation: animate the actual view swap, not only the new page. */
-let rcViewTransitionBusy=false;
+/* RC: duidelijke, consistente overgang tussen de hoofdtabbladen. */
+let rcTransitionTimer=null;
+let rcTransitionToken=0;
 function show(v){
- const current=document.querySelector('.view.active')?.id;
- if(current===v || !document.startViewTransition || rcViewTransitionBusy){
-  return showImmediate(v);
- }
- rcViewTransitionBusy=true;
- document.documentElement.classList.add('rc-view-switching');
- try{
-  const transition=document.startViewTransition(()=>showImmediate(v));
-  transition.finished.catch(()=>{}).finally(()=>{
-   rcViewTransitionBusy=false;
-   document.documentElement.classList.remove('rc-view-switching');
-  });
- }catch(err){
-  rcViewTransitionBusy=false;
-  document.documentElement.classList.remove('rc-view-switching');
-  return showImmediate(v);
- }
+ const old=document.querySelector('.view.active');
+ const target=document.getElementById(v);
+ if(!target || old?.id===v){showImmediate(v);return;}
+ const token=++rcTransitionToken;
+ if(rcTransitionTimer!==null){clearTimeout(rcTransitionTimer);rcTransitionTimer=null;}
+ document.querySelectorAll('.view').forEach(el=>{el.style.transition='';el.style.opacity='';el.style.transform='';});
+ if(!old){showImmediate(v);return;} // De gebruiker heeft animaties voor deze app expliciet ingeschakeld.
+ old.style.transition='opacity 180ms ease-in';
+ old.style.opacity='1';
+ void old.offsetWidth;
+ old.style.opacity='0';
+ rcTransitionTimer=setTimeout(()=>{
+  if(token!==rcTransitionToken)return;
+  rcTransitionTimer=null;
+  old.style.transition='';old.style.opacity='';
+  showImmediate(v);
+  const next=document.getElementById(v);
+  if(!next || !next.classList.contains('active'))return;
+  next.style.transition='none';
+  next.style.opacity='0';
+  next.style.transform='translateY(8px)';
+  void next.offsetWidth;
+  next.style.transition='opacity 390ms ease-out, transform 390ms cubic-bezier(.2,.7,.2,1)';
+  next.style.opacity='1';
+  next.style.transform='translateY(0)';
+  setTimeout(()=>{if(token===rcTransitionToken){next.style.transition='';next.style.opacity='';next.style.transform='';}},430);
+ },190);
 }
 function showImmediate(v){
  const previous=document.querySelector('.view.active')?.id||lastHistoryView;
@@ -1273,7 +1284,7 @@ function updateDiary(){
   return b._sourceIndex-a._sourceIndex;
  };
  const rows=allHistory().map((entry,index)=>({...entry,_viewOrdinal:ordinalByIndex.get(index),_sourceIndex:index})).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||watchTieOrder(a,b));
- const visibleRows=diaryFilterFilmId===null?rows:rows.filter(x=>(x._linkedFilmIndex??diaryFilmId(x.title,x._year))===diaryFilterFilmId || (DATA.films[diaryFilterFilmId] && filmHistory(DATA.films[diaryFilterFilmId]).some(h=>h===x)));
+ const visibleRows=diaryFilterFilmId===null?rows:rows.filter(x=>(x._linkedFilmIndex??diaryFilmId(x.title,x._year))===diaryFilterFilmId || (DATA.films[diaryFilterFilmId] && normTitle(x.title)===normTitle(DATA.films[diaryFilterFilmId].title) && (!x._year || !DATA.films[diaryFilterFilmId].year || Number(x._year)===Number(DATA.films[diaryFilterFilmId].year))));
  const banner=$('diaryFilterBanner');
  $('diaryBackFilm').hidden=(diaryFilterFilmId===null);
  if(diaryFilterFilmId!==null){const f=DATA.films[diaryFilterFilmId];banner.hidden=false;banner.innerHTML=`<span>🎬 Alleen kijkbeurten van <strong>${esc(displayFilmTitle(f.title))}</strong> (${visibleRows.length} geregistreerd)</span><button id="clearDiaryFilter">Toon alle films</button>`;$('clearDiaryFilter').onclick=()=>{diaryFilterFilmId=null;$('diaryBackFilm').hidden=true;updateDiary()};}else{banner.hidden=true;banner.innerHTML='';}
@@ -3715,74 +3726,7 @@ items=readLocal();render();fetchRemote();
     filter: brightness(1.09);
   }
 }
-/* Standard motion: retain the cinematic page entrance on iPad and desktop. */
-@media (prefers-reduced-motion: no-preference) {
-  .view.active {
-    animation: rc-tablet-page-enter .52s cubic-bezier(.2,.72,.25,1) both !important;
-  }
-  @keyframes rc-tablet-page-enter {
-    from { opacity: .25; transform: translate3d(0,14px,0); }
-    to { opacity: 1; transform: translate3d(0,0,0); }
-  }
-}
-/* Respect accessibility preferences without making navigation feel abrupt.
-   Overrides the earlier !important Film58 entrance animation. */
-@media (prefers-reduced-motion: reduce) {
-  .view.active {
-    animation: rc-tablet-reduced-fade .22s ease-out both !important;
-  }
-  @keyframes rc-tablet-reduced-fade {
-    from { opacity: .65; }
-    to { opacity: 1; }
-  }
-  /* Avoid zooming / moving poster cards when reduced motion is selected. */
-  .movie, .movie .poster, .label-card, nav button, button {
-    transition: background-color .15s ease, border-color .15s ease, color .15s ease !important;
-  }
-  .movie:hover, .movie:hover .poster, .movie:focus-within .poster {
-    transform: none !important;
-  }
-}
-
-/* Real crossfade between views: works in Safari with View Transitions support. */
-@supports (view-transition-name: root) {
- html.rc-view-switching::view-transition-old(root) {
-  animation: rc-old-view .24s ease-in both;
- }
- html.rc-view-switching::view-transition-new(root) {
-  animation: rc-new-view .30s ease-out both;
- }
- html.rc-view-switching .view.active { animation: none !important; }
- @keyframes rc-old-view { from { opacity: 1; } to { opacity: 0; } }
- @keyframes rc-new-view { from { opacity: 0; } to { opacity: 1; } }
- @media (prefers-reduced-motion: reduce) {
-  html.rc-view-switching::view-transition-old(root) { animation-duration: .12s; }
-  html.rc-view-switching::view-transition-new(root) { animation-duration: .16s; }
- }
-}
-</style>
-<style id="rc-clean-page-transitions">
-/* One transition system only: keep the smooth fade, but avoid two pages
-   appearing simultaneously (the ghosting seen on tab switches). */
-.view.active { animation:none !important; }
-@supports (view-transition-name: rc-content) {
-  .view.active { view-transition-name: rc-content; }
-  html.rc-view-switching::view-transition-old(root),
-  html.rc-view-switching::view-transition-new(root) {
-    animation:none !important;
-  }
-  html.rc-view-switching::view-transition-old(rc-content) {
-    animation:rc-page-out .16s ease-in both !important;
-  }
-  html.rc-view-switching::view-transition-new(rc-content) {
-    animation:rc-page-in .18s ease-out .16s both !important;
-  }
-  @keyframes rc-page-out { from {opacity:1} to {opacity:0} }
-  @keyframes rc-page-in { from {opacity:0} to {opacity:1} }
-  @media (prefers-reduced-motion:reduce) {
-    html.rc-view-switching::view-transition-old(rc-content) { animation-duration:.10s !important; }
-    html.rc-view-switching::view-transition-new(rc-content) { animation-duration:.12s !important; animation-delay:.10s !important; }
-  }
-}
+/* Een enkele overgangsaansturing in JavaScript, geen overlappende animaties. */
+.view.active{animation:none!important}
 </style>
 </body></html>
