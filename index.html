@@ -3901,23 +3901,23 @@ items=readLocal();render();fetchRemote();
   }catch(e){status.textContent='Camera kon niet starten. Controleer de cameratoestemming of voer de barcode handmatig in.';}
  }
  function lookup(q){
-  // Barcodes are rarely indexed on Blu-ray.com itself. Search product listings first.
   const term=String(q||'').trim();
-  const query=/^\d{8,14}$/.test(term)?'\"'+term+'\" Blu-ray OR 4K UHD':'blu-ray.com '+term;
-  window.open('https://www.google.com/search?q='+encodeURIComponent(query),'_blank','noopener,noreferrer');
+  if(!term)return;
+  const url='https://www.blu-ray.com/search/?quicksearch=1&quicksearch_keyword='+encodeURIComponent(term)+'&section=bluraymovies';
+  window.open(url,'_blank','noopener,noreferrer');
  }
  function enhance(row){
   if(row.querySelector('.rc-disc-lookup'))return;
   const grid=row.querySelector('.add-film-grid');if(!grid)return;
   const panel=document.createElement('div');panel.className='rc-disc-lookup';
-  panel.innerHTML='<strong>🔎 Fysieke uitgave vinden · zoekverbetering 2</strong><div class="rc-lookup-row"><input class="rc-lookup-code" type="text" inputmode="numeric" maxlength="14" placeholder="EAN / UPC-barcode"><button type="button" class="rc-lookup-scan">📷 Scan barcode</button><button type="button" class="rc-lookup-search">Zoek barcode</button><button type="button" class="rc-lookup-title">Zoek op titel</button></div><small>Zoekt op de barcode bij winkels en discdatabases (een barcode staat vaak niet op Blu-ray.com). Vergelijk de gevonden hoes, regio en uitgave voordat je specificaties overneemt. Automatisch ophalen en opslaan van de barcode zijn nog niet beschikbaar.</small>';
+  panel.innerHTML='<strong>🔎 Fysieke uitgave vinden · Blu-ray.com</strong><div class="rc-lookup-row"><input class="rc-lookup-code" type="text" inputmode="numeric" maxlength="14" placeholder="EAN / UPC-barcode"><button type="button" class="rc-lookup-scan">📷 Scan barcode</button><button type="button" class="rc-lookup-search">Zoek barcode</button><button type="button" class="rc-lookup-title">Zoek op titel</button></div><small>Opent de zoekresultaten rechtstreeks op Blu-ray.com. Vergelijk de gevonden hoes, regio en uitgave. Automatisch ophalen en opslaan van specificaties zijn nog niet beschikbaar.</small>';
   grid.appendChild(panel);
   const input=panel.querySelector('.rc-lookup-code');
   panel.querySelector('.rc-lookup-scan').onclick=()=>scan(input);
   panel.querySelector('.rc-lookup-search').onclick=()=>{const code=input.value.replace(/\D/g,'');if(!/^\d{8,14}$/.test(code)){alert('Vul een geldige EAN/UPC-barcode in (8–14 cijfers).');return;}lookup(code);};
   panel.querySelector('.rc-lookup-title').onclick=()=>{
    const title=document.querySelector('#addTitle,#filmTitle,#addFilmTitle,.add-film-card input[name="title"]')?.value||'';
-   const query=title.trim()||prompt('Welke filmtitel wil je zoeken?');if(query)lookup(query+' Blu-ray');
+   const query=title.trim()||prompt('Welke filmtitel wil je zoeken?');if(query)lookup(query);
   };
  }
  function update(){document.querySelectorAll('.add-film-row').forEach(enhance);}
