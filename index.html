@@ -3900,12 +3900,17 @@ items=readLocal();render();fetchRemote();
    }tick();
   }catch(e){status.textContent='Camera kon niet starten. Controleer de cameratoestemming of voer de barcode handmatig in.';}
  }
- function lookup(q){window.open('https://www.google.com/search?q='+encodeURIComponent('site:blu-ray.com/movies/ '+q),'_blank','noopener,noreferrer');}
+ function lookup(q){
+  // Barcodes are rarely indexed on Blu-ray.com itself. Search product listings first.
+  const term=String(q||'').trim();
+  const query=/^\d{8,14}$/.test(term)?'\"'+term+'\" Blu-ray OR 4K UHD':'blu-ray.com '+term;
+  window.open('https://www.google.com/search?q='+encodeURIComponent(query),'_blank','noopener,noreferrer');
+ }
  function enhance(row){
   if(row.querySelector('.rc-disc-lookup'))return;
   const grid=row.querySelector('.add-film-grid');if(!grid)return;
   const panel=document.createElement('div');panel.className='rc-disc-lookup';
-  panel.innerHTML='<strong>🔎 Fysieke uitgave opzoeken</strong><div class="rc-lookup-row"><input class="rc-lookup-code" type="text" inputmode="numeric" maxlength="14" placeholder="EAN / UPC-barcode"><button type="button" class="rc-lookup-scan">📷 Scan barcode</button><button type="button" class="rc-lookup-search">Zoek barcode</button><button type="button" class="rc-lookup-title">Zoek op titel</button></div><small>Zoekt in een nieuw tabblad naar de juiste Blu-ray.com-uitgave. Controleer daar de specificaties en neem ze voorlopig handmatig over. Automatische import is nog niet gekoppeld; de barcode wordt nog niet opgeslagen.</small>';
+  panel.innerHTML='<strong>🔎 Fysieke uitgave vinden · zoekverbetering 2</strong><div class="rc-lookup-row"><input class="rc-lookup-code" type="text" inputmode="numeric" maxlength="14" placeholder="EAN / UPC-barcode"><button type="button" class="rc-lookup-scan">📷 Scan barcode</button><button type="button" class="rc-lookup-search">Zoek barcode</button><button type="button" class="rc-lookup-title">Zoek op titel</button></div><small>Zoekt op de barcode bij winkels en discdatabases (een barcode staat vaak niet op Blu-ray.com). Vergelijk de gevonden hoes, regio en uitgave voordat je specificaties overneemt. Automatisch ophalen en opslaan van de barcode zijn nog niet beschikbaar.</small>';
   grid.appendChild(panel);
   const input=panel.querySelector('.rc-lookup-code');
   panel.querySelector('.rc-lookup-scan').onclick=()=>scan(input);
