@@ -3857,4 +3857,65 @@ items=readLocal();render();fetchRemote();
  }
  new MutationObserver(check).observe(host,{childList:true,subtree:false});check();
 })();
+</script><style id="rc-disc-lookup-style">
+/* Identieke groene paneelstijl als 'Landen van herkomst' */
+.rc-av-showcase .rc-av-card,.rc-av-fields>details,.rc-av-fields>div{background:linear-gradient(135deg,rgba(10,35,33,.85),rgba(9,18,19,.91))!important;border:1px solid rgba(183,204,194,.24)!important;box-shadow:0 8px 26px #0002!important;border-radius:9px!important}
+.rc-disc-lookup{grid-column:1/-1;padding:12px 14px;background:linear-gradient(135deg,rgba(10,35,33,.85),rgba(9,18,19,.91));border:1px solid rgba(183,204,194,.24);border-radius:9px;margin-top:6px}
+.rc-disc-lookup strong{display:block;font-size:13px;color:#e9d3ae;margin-bottom:8px}
+.rc-disc-lookup .rc-lookup-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.rc-disc-lookup .rc-lookup-code{flex:1;min-width:170px;width:auto!important}
+.rc-disc-lookup button{border:1px solid #807254;border-radius:7px;background:#15342d;color:#e9d3ae;padding:9px 11px;cursor:pointer;font-size:12px}
+.rc-disc-lookup small{display:block;color:#aabdb4;margin-top:9px;line-height:1.5}
+#rcBarcodeDialog[hidden]{display:none!important}
+#rcBarcodeDialog{position:fixed;inset:0;background:#000d;z-index:20000;display:flex;align-items:center;justify-content:center;padding:20px}
+#rcBarcodeDialog .rc-scan-card{background:#0d2925;border:1px solid #64745e;border-radius:12px;padding:20px;width:min(480px,100%);color:#eee9df}
+#rcBarcodeDialog video{width:100%;max-height:310px;background:#050a09;border-radius:8px;margin:12px 0}
+#rcBarcodeDialog button{background:#263e35;color:#eee9df;border:1px solid #7e8d77;border-radius:7px;padding:9px 13px;cursor:pointer}
+</style><script id="rc-disc-lookup-script">
+(()=>{
+ 'use strict';
+ let activeInput=null,stream=null,scanFrame=null,scanning=false;
+ const dialog=document.createElement('div');dialog.id='rcBarcodeDialog';dialog.hidden=true;
+ dialog.innerHTML='<div class="rc-scan-card" role="dialog" aria-modal="true" aria-label="Barcode scannen"><strong>Barcode scannen</strong><video autoplay muted playsinline></video><div class="rc-scan-status" aria-live="polite">Camera starten…</div><p style="font-size:12px;color:#b3c3ba">Houd de EAN/UPC-code op de achterkant van het hoesje voor de camera.</p><button type="button" class="rc-scan-close">Sluiten</button></div>';
+ document.body.appendChild(dialog);
+ const video=dialog.querySelector('video');
+ function stop(){scanning=false;if(scanFrame)cancelAnimationFrame(scanFrame);scanFrame=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;dialog.hidden=true;}
+ dialog.querySelector('.rc-scan-close').onclick=stop;
+ dialog.addEventListener('click',e=>{if(e.target===dialog)stop();});
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!dialog.hidden)stop();});
+ async function scan(input){
+  activeInput=input;dialog.hidden=false;const status=dialog.querySelector('.rc-scan-status');
+  if(!navigator.mediaDevices?.getUserMedia){status.textContent='Camera niet beschikbaar. Voer de barcode handmatig in.';return;}
+  if(!('BarcodeDetector' in window)){status.textContent='Deze browser ondersteunt het automatisch herkennen van barcodes niet. Probeer Chrome op je Mac of voer de code handmatig in.';return;}
+  try{
+   const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e']});
+   stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+   if(dialog.hidden){stream.getTracks().forEach(t=>t.stop());stream=null;return;}
+   video.srcObject=stream;await video.play();scanning=true;status.textContent='Zoeken naar barcode…';
+   let busy=false;
+   async function tick(){
+    if(!scanning)return;
+    if(!busy&&video.readyState>=2){busy=true;try{const found=await detector.detect(video);const code=found.find(b=>/^\d{8,14}$/.test(b.rawValue||''));if(code){activeInput.value=code.rawValue;activeInput.dispatchEvent(new Event('input',{bubbles:true}));stop();activeInput.focus();return;}}catch(e){}finally{busy=false;}}
+    scanFrame=requestAnimationFrame(tick);
+   }tick();
+  }catch(e){status.textContent='Camera kon niet starten. Controleer de cameratoestemming of voer de barcode handmatig in.';}
+ }
+ function lookup(q){window.open('https://www.google.com/search?q='+encodeURIComponent('site:blu-ray.com/movies/ '+q),'_blank','noopener,noreferrer');}
+ function enhance(row){
+  if(row.querySelector('.rc-disc-lookup'))return;
+  const grid=row.querySelector('.add-film-grid');if(!grid)return;
+  const panel=document.createElement('div');panel.className='rc-disc-lookup';
+  panel.innerHTML='<strong>🔎 Fysieke uitgave opzoeken</strong><div class="rc-lookup-row"><input class="rc-lookup-code" type="text" inputmode="numeric" maxlength="14" placeholder="EAN / UPC-barcode"><button type="button" class="rc-lookup-scan">📷 Scan barcode</button><button type="button" class="rc-lookup-search">Zoek barcode</button><button type="button" class="rc-lookup-title">Zoek op titel</button></div><small>Zoekt in een nieuw tabblad naar de juiste Blu-ray.com-uitgave. Controleer daar de specificaties en neem ze voorlopig handmatig over. Automatische import is nog niet gekoppeld; de barcode wordt nog niet opgeslagen.</small>';
+  grid.appendChild(panel);
+  const input=panel.querySelector('.rc-lookup-code');
+  panel.querySelector('.rc-lookup-scan').onclick=()=>scan(input);
+  panel.querySelector('.rc-lookup-search').onclick=()=>{const code=input.value.replace(/\D/g,'');if(!/^\d{8,14}$/.test(code)){alert('Vul een geldige EAN/UPC-barcode in (8–14 cijfers).');return;}lookup(code);};
+  panel.querySelector('.rc-lookup-title').onclick=()=>{
+   const title=document.querySelector('#addTitle,#filmTitle,#addFilmTitle,.add-film-card input[name="title"]')?.value||'';
+   const query=title.trim()||prompt('Welke filmtitel wil je zoeken?');if(query)lookup(query+' Blu-ray');
+  };
+ }
+ function update(){document.querySelectorAll('.add-film-row').forEach(enhance);}
+ new MutationObserver(update).observe(document.body,{childList:true,subtree:true});update();
+})();
 </script></body></html>
