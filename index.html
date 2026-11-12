@@ -4323,4 +4323,59 @@ async function rcLoadFilmTrivia(f){
  panel.addEventListener('toggle',()=>{if(panel.open&&!loaded){loaded=true;render()}});
 }
 </script>
-</body></html>
+<style id="rc-pretty-edition-controls-style">
+.rc-pretty-picker{position:relative;margin-top:6px;background:#0b2824;border:1px solid #315a4c;border-radius:9px;color:#e8eee7;min-width:0}
+.rc-pretty-picker>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 13px;font-size:13px;font-weight:600;min-height:44px}
+.rc-pretty-picker>summary::-webkit-details-marker{display:none}
+.rc-pretty-picker>summary::after{content:'⌄';font-size:20px;color:#d3ae78;line-height:12px;transition:transform .2s}
+.rc-pretty-picker[open]>summary::after{transform:rotate(180deg)}
+.rc-pretty-options{border-top:1px solid #315a4c;padding:7px;max-height:250px;overflow:auto;display:grid;gap:3px}
+.rc-pretty-options button{display:block;width:100%;text-align:left;padding:9px 10px;border:0;border-radius:6px;background:transparent;color:#e8eee7;font:inherit;font-size:13px;cursor:pointer}
+.rc-pretty-options button:hover,.rc-pretty-options button:focus-visible{background:#254b40;outline:none}
+.rc-pretty-options button[aria-selected=true]{background:#254b40;color:#f1ddbd}
+.rc-pretty-edition-input{width:100%!important;box-sizing:border-box!important;margin:0!important;background:#0b2824!important;color:#e8eee7!important;border:1px solid #315a4c!important;border-radius:9px!important;padding:12px 40px 12px 13px!important;min-height:44px}
+.rc-pretty-edit-wrap{position:relative;margin-top:6px}
+.rc-pretty-edit-toggle{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:34px;height:34px;background:transparent;color:#d3ae78;border:0;cursor:pointer;font-size:20px}
+.rc-pretty-edit-options{position:absolute;z-index:1000;left:0;right:0;top:calc(100% + 4px);max-height:245px;overflow:auto;background:#0b2824;border:1px solid #315a4c;border-radius:9px;padding:7px;box-shadow:0 12px 30px #0009;display:grid;gap:3px}
+.rc-pretty-edit-options[hidden]{display:none!important}
+.rc-pretty-edit-options button{border:0;border-radius:6px;text-align:left;background:transparent;color:#e8eee7;padding:9px 10px;font:inherit;font-size:13px;cursor:pointer}
+.rc-pretty-edit-options button:hover,.rc-pretty-edit-options button:focus-visible{background:#254b40;outline:none}
+</style>
+<script id="rc-pretty-edition-controls-script">
+(()=>{
+ const choices=['Standaard','Standaard Slipcover','Standaard Set','Steelbook','Box-Set','Digi-Pack','Digi-Book','Limited Edition','Limited Edition Slipcover','Limited Edition Steelbook','Limited Edition Box-Set','Limited Edition Digi-Pack'];
+ const formats=['Blu-ray','4K','4K + Blu-ray','DVD'];
+ function enhance(row){
+  const select=row.querySelector('select.edition-format');
+  if(select&&!select.dataset.rcPretty){
+   select.dataset.rcPretty='1';
+   const picker=document.createElement('details');picker.className='rc-pretty-picker';
+   const summary=document.createElement('summary');summary.textContent=select.value||'Blu-ray';
+   const options=document.createElement('div');options.className='rc-pretty-options';
+   formats.forEach(value=>{const btn=document.createElement('button');btn.type='button';btn.textContent=value;btn.onclick=()=>{select.value=value;select.dispatchEvent(new Event('change',{bubbles:true}));picker.open=false};options.append(btn)});
+   picker.append(summary,options);select.insertAdjacentElement('afterend',picker);
+   select.style.display='none';
+   const sync=()=>{summary.textContent=select.value||'Kies formaat';options.querySelectorAll('button').forEach(btn=>btn.setAttribute('aria-selected',String(btn.textContent===select.value)))};
+   select.addEventListener('change',sync);sync();
+  }
+  const input=row.querySelector('input.edition-type');
+  if(input&&!input.dataset.rcPretty){
+   input.dataset.rcPretty='1';input.setAttribute('list','rcPrettyEditionNoNativeList');input.classList.add('rc-pretty-edition-input');
+   const wrap=document.createElement('div');wrap.className='rc-pretty-edit-wrap';
+   input.parentNode.insertBefore(wrap,input);wrap.append(input);
+   const toggle=document.createElement('button');toggle.type='button';toggle.className='rc-pretty-edit-toggle';toggle.textContent='⌄';toggle.setAttribute('aria-label','Kies editie');
+   const menu=document.createElement('div');menu.className='rc-pretty-edit-options';menu.hidden=true;
+   choices.forEach(value=>{const btn=document.createElement('button');btn.type='button';btn.textContent=value;btn.addEventListener('mousedown',e=>e.preventDefault());btn.onclick=()=>{input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));menu.hidden=true;input.focus()};menu.append(btn)});
+   wrap.append(toggle,menu);
+   toggle.onclick=()=>{menu.hidden=!menu.hidden;if(!menu.hidden)input.focus()};
+   input.addEventListener('keydown',e=>{if(e.key==='Escape')menu.hidden=true});
+   document.addEventListener('pointerdown',e=>{if(!wrap.contains(e.target))menu.hidden=true});
+   // Het veld blijft vrij bewerkbaar; de keuzelijst verandert alleen de tekst.
+  }
+ }
+ function refresh(){document.querySelectorAll('#newFilmEditions .add-film-row').forEach(enhance)}
+ const observer=new MutationObserver(refresh);
+ observer.observe(document.body,{childList:true,subtree:true});
+ refresh();
+})();
+</script></body></html>
