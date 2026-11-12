@@ -3089,7 +3089,29 @@ function addEdition(existing=null){
    const result=await response.json().catch(()=>({}));if(!response.ok)throw Error(result.error||'HTTP '+response.status);
    lookupInfo=result;
    const fill=(id,value)=>{if(value!==undefined&&value!==null&&value!=='')el(id).value=String(value)};
-   fill('newFilmTitle',result.title);fill('newFilmYear',result.year);fill('newFilmDirector',result.director);fill('newFilmGenres',result.genres);fill('newFilmRuntime',result.runtime);fill('newFilmLanguage',result.language);fill('newFilmCast',result.cast);fill('newFilmImdb',result.imdb_rating);
+   fill('newFilmTitle',result.title);fill('newFilmYear',result.year);fill('newFilmDirector',Array.isArray(result.directors)&&result.directors.length?result.directors.join(' | '):result.director);
+   // If the metadata function returns only one director, check TMDB credits directly
+   // when a TMDB API key is available in the existing site settings.
+   try{
+    const key=typeof tmdbKey!=='undefined'?tmdbKey:'';
+    if(key){
+     let movieId=result.tmdb_id||result.tmdbId||result.tmdb_movie_id||null;
+     if(!movieId){
+      const q=new URLSearchParams({api_key:key,query:result.title||title,include_adult:'false'});
+      if(result.year||year)q.set('year',String(result.year||year));
+      const found=await fetch('https://api.themoviedb.org/3/search/movie?'+q);
+      if(found.ok){const json=await found.json();movieId=json.results?.[0]?.id;}
+     }
+     if(movieId){
+      const creditsResponse=await fetch('https://api.themoviedb.org/3/movie/'+encodeURIComponent(movieId)+'/credits?api_key='+encodeURIComponent(key));
+      if(creditsResponse.ok){
+       const credits=await creditsResponse.json();
+       const directors=[...new Set((credits.crew||[]).filter(person=>person.job==='Director').map(person=>person.name).filter(Boolean))];
+       if(directors.length)fill('newFilmDirector',directors.join(' | '));
+      }
+     }
+    }
+   }catch(error){console.warn('Extra regisseurs konden niet worden opgehaald',error);}fill('newFilmGenres',result.genres);fill('newFilmRuntime',result.runtime);fill('newFilmLanguage',result.language);fill('newFilmCast',result.cast);fill('newFilmImdb',result.imdb_rating);
    const first=el('newFilmCuts').querySelector('.add-film-row');if(first){first.querySelector('.cut-title').value=val('newFilmTitle');first.querySelector('.cut-runtime').value=val('newFilmRuntime')};refreshEditionCuts();
    status.textContent='✓ Filmgegevens gevonden. Controleer de speelduur en vul de ondertiteling en uitgave in.';
   }catch(err){status.textContent='Automatisch ophalen is nog niet beschikbaar ('+err.message+'). Je kunt de film wel handmatig invullen en opslaan.';}finally{btn.disabled=false}
@@ -4053,7 +4075,7 @@ items=readLocal();render();fetchRemote();
   }
   let list=document.getElementById('rcExistingEditionTypes');
   if(!list){list=document.createElement('datalist');list.id='rcExistingEditionTypes';document.body.appendChild(list)}
-  const values=[...new Set((typeof DATA!=='undefined'?DATA.films:[]).flatMap(f=>(f.editions||[]).map(e=>String(e.edition||'').trim())).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'nl'));
+  const values=["Standaard", "Standaard Slipcover", "Standaard Set", "Steelbook", "Box-Set", "Digi-Pack", "Digi-Book", "Limited Edition", "Limited Edition Slipcover", "Limited Edition Steelbook", "Limited Edition Box-Set", "Limited Edition Digi-Pack"];
   list.replaceChildren(...values.map(v=>{const opt=document.createElement('option');opt.value=v;return opt}));
   document.querySelectorAll('#newFilmEditions .edition-type').forEach(input=>{input.setAttribute('list','rcExistingEditionTypes');input.setAttribute('autocomplete','off')});
  }
