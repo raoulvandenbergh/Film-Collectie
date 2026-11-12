@@ -3934,7 +3934,6 @@ items=readLocal();render();fetchRemote();
 <script id="rc-spec-import-script">
 (()=>{
  'use strict';
- const domain=/^https:\/\/(?:www\.)?blu-ray\.com\/movies\/[^?#]+\/\d+\/?(?:[?#].*)?$/i;
  function parse(text){
   const s=String(text||'').replace(/\u00a0/g,' ').replace(/\s+/g,' ');
   const hdr=[];const audio=[];
@@ -3962,15 +3961,14 @@ items=readLocal();render();fetchRemote();
   return {hdr,audio};
  }
  function enhance(row){
+  if(!row.closest('#newFilmEditions'))return;
   const panel=row.querySelector('.rc-disc-lookup');if(!panel||panel.querySelector('.rc-spec-import'))return;
   const wrap=document.createElement('div');wrap.className='rc-spec-import';
-  wrap.innerHTML='<strong>📋 Specificaties overnemen</strong><label>Blu-ray.com-link (ter controle)</label><input class="rc-spec-url" type="url" placeholder="https://www.blu-ray.com/movies/.../"><div class="rc-spec-actions"><button type="button" class="rc-spec-open">Open uitgave</button></div><label>Technische specificaties van die pagina</label><textarea class="rc-spec-text" placeholder="Selecteer en kopieer op Blu-ray.com de regels met Video, HDR en Audio; plak ze hier."></textarea><div class="rc-spec-actions"><button type="button" class="rc-spec-apply">Gegevens overnemen</button></div><div class="rc-spec-msg" role="status" aria-live="polite">Gratis, zonder API. Alleen Sound en HDR worden nu automatisch herkend. De link alleen kan de pagina niet uitlezen.</div>';
+  wrap.innerHTML='<strong>📋 Specificaties overnemen</strong><label>Technische specificaties van die pagina</label><textarea class="rc-spec-text" placeholder="Selecteer en kopieer op Blu-ray.com de regels met Video, HDR en Audio; plak ze hier."></textarea><div class="rc-spec-actions"><button type="button" class="rc-spec-apply">Gegevens overnemen</button></div><div class="rc-spec-msg" role="status" aria-live="polite">Alleen Sound en HDR worden uit de geplakte technische specificaties herkend.</div>';
   panel.appendChild(wrap);
   const msg=wrap.querySelector('.rc-spec-msg');
-  wrap.querySelector('.rc-spec-open').onclick=()=>{const url=wrap.querySelector('.rc-spec-url').value.trim();if(!domain.test(url)){msg.textContent='Plak eerst een geldige link naar een specifieke filmuitgave op Blu-ray.com.';return;}window.open(url,'_blank','noopener,noreferrer');};
   wrap.querySelector('.rc-spec-apply').onclick=()=>{
-   const url=wrap.querySelector('.rc-spec-url').value.trim();if(url&&!domain.test(url)){msg.textContent='De link lijkt geen geldige Blu-ray.com-filmpagina. Controleer hem eerst.';return;}
-   const text=wrap.querySelector('.rc-spec-text').value.trim();if(!text){msg.textContent='Plak eerst de technische specificaties. Een URL alleen kan niet automatisch worden uitgelezen.';return;}
+   const text=wrap.querySelector('.rc-spec-text').value.trim();if(!text){msg.textContent='Plak eerst de technische specificaties. ';return;}
    const found=parse(text);if(!found.hdr.length&&!found.audio.length){msg.textContent='Geen herkenbare Sound- of HDR-formaten gevonden. Controleer of je de technische specificaties hebt gekopieerd.';return;}
    const choices=[...row.querySelectorAll('.rc-audio-option,.rc-hdr-option')];
    const available=choices.filter(c=>found.audio.includes(c.value)||found.hdr.includes(c.value));
@@ -3981,7 +3979,7 @@ items=readLocal();render();fetchRemote();
    msg.textContent='Overgenomen: '+[...found.audio,...found.hdr].join(' · ')+(missing.length?'\nNiet automatisch selecteerbaar: '+missing.join(', '):'')+'\nControleer de vakjes en klik daarna op Film opslaan. Audiotalen, ondertitels en beeldverhouding worden nog niet geïmporteerd.';
   };
  }
- function update(){document.querySelectorAll('.add-film-row').forEach(enhance)}
+ function update(){document.querySelectorAll('#newFilmEditions .add-film-row').forEach(enhance)}
  new MutationObserver(update).observe(document.body,{childList:true,subtree:true});update();
 })();
 </script></body></html>
