@@ -1237,7 +1237,7 @@ const WATCH_KEY='filmArchiveExtraWatchesV8';
 let extraWatches=[];
 try{const stored=JSON.parse(localStorage.getItem(WATCH_KEY)||'[]');if(Array.isArray(stored))extraWatches=stored.filter(x=>x&&typeof x.title==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x.date))}catch(e){}
 const RATING_KEY='filmarchive_rating_overrides_v1';let ratingOverrides={};try{const r=JSON.parse(localStorage.getItem(RATING_KEY)||'{}');if(r&&typeof r==='object'&&!Array.isArray(r))ratingOverrides=r}catch(e){}
-const filmRating=f=>ratingOverrides[f.title]!==undefined?ratingOverrides[f.title]:f.rating;
+const filmRating=f=>window.__supabaseFilmIds?.[DATA.films.indexOf(f)]!=null?f.rating:(ratingOverrides[f.title]!==undefined?ratingOverrides[f.title]:f.rating);
 const allHistory=()=>DATA.history.concat(extraWatches);
 const normTitle=t=>String(t||'').toLocaleLowerCase('nl-NL').trim().replace(/\s*\((?:black & white version|director['’]s cut|extended cut|theatrical cut|unrated cut|final cut|extended edition|redux cut|international cut|theatrical cut with alternative end|original uncut version|preview cut|the 1998 reconstruction)\)$/i,'').trim();
 // Eenduidige filmtitelherkenning, ook bij Letterboxd- en Excel-schrijfwijzen.
@@ -2303,10 +2303,15 @@ function renderCast(f,id){
   const result=await getPeopleMetadata(f);if(activeDetailId!==id)return;
   tmdbCast=Array.isArray(result.cast_profiles)?result.cast_profiles.filter(a=>a&&a.name):[];
   if(result.imdb_id&&!f._imdbId)f._imdbId=result.imdb_id;
-  const director=result.director_profile;
-  if(director&&photoPath(director)){
-   const photo=$('directorPhoto');if(photo){const img=document.createElement('img');img.className='director-photo';img.src=photoPath(director);img.alt='Portret '+director.name;img.loading='lazy';img.onerror=()=>img.replaceWith(document.createTextNode('◈'));photo.replaceWith(img)}
-  }
+  const directors=Array.isArray(result.director_profiles)&&result.director_profiles.length?result.director_profiles:(result.director_profile?[result.director_profile]:[]);
+  document.querySelectorAll('#directorCards [data-director-index]').forEach(card=>{
+   const name=rcDirectorNames(f.director)[Number(card.dataset.directorIndex)];
+   const person=directors.find(p=>String(p.name||'').trim().toLocaleLowerCase('nl-NL')===String(name||'').trim().toLocaleLowerCase('nl-NL'));
+   if(!person||!photoPath(person))return;
+   const photo=card.querySelector('.director-photo');
+   if(!photo)return;
+   const img=document.createElement('img');img.className='director-photo';img.src=photoPath(person);img.alt='Portret '+person.name;img.loading='lazy';img.onerror=()=>img.replaceWith(document.createTextNode('◈'));photo.replaceWith(img);
+  });
   paint();updateExternalFilmLinks(f);
   info.textContent=tmdbCast.length?'Acteurs en beschikbare portretfoto’s via TMDB.':'Geen acteurs gevonden bij TMDB.';
  }catch(e){if(activeDetailId===id)info.textContent='Portretfoto’s tijdelijk niet beschikbaar; de acteurs blijven zichtbaar.'}})();
@@ -2376,13 +2381,13 @@ async function showTopPopover(event,kind,index){
  }else{
   try{
    const meta=await getPeopleMetadata(entry.film);
-   const list=kind==='directors'?[meta.director_profile]:meta.cast_profiles||[];
+   const list=kind==='directors'?(meta.director_profiles||[meta.director_profile]):meta.cast_profiles||[];
    const person=list.find(x=>x&&String(x.name||'').toLocaleLowerCase('nl-NL')===entry.name.toLocaleLowerCase('nl-NL'));
    url=person?.photo_url||'';
    if(!url){
     const matching=DATA.films.filter(f=>kind==='directors'?String(f.director||'').includes(entry.name):String(f.cast||'').includes(entry.name)).slice(0,6);
     for(const film of matching){if(film===entry.film||!film._tmdbId)continue;
-     try{const more=await getPeopleMetadata(film);const profiles=kind==='directors'?[more.director_profile]:more.cast_profiles||[];
+     try{const more=await getPeopleMetadata(film);const profiles=kind==='directors'?(more.director_profiles||[more.director_profile]):more.cast_profiles||[];
       const match=profiles.find(x=>x&&String(x.name||'').toLocaleLowerCase('nl-NL')===entry.name.toLocaleLowerCase('nl-NL'));
       if(match?.photo_url){url=match.photo_url;break}
      }catch(e){}
@@ -4112,7 +4117,7 @@ items=readLocal();render();fetchRemote();
 })();
 </script>
 <style id="rc-film-finance-style">
-.rc-film-finance{margin-top:20px}.rc-finance-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+.rc-film-finance{margin-top:20px}.rc-finance-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.rc-finance-head h3{margin:0}.rc-currency-toggle{background:#243d37;color:#f1ddbd;border:1px solid #8d7956;border-radius:7px;padding:8px 12px;cursor:pointer}.rc-finance-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
 .rc-finance-cell{border:1px solid #6c6858;border-radius:9px;padding:14px;background:#102622}
 .rc-finance-cell small{display:block;color:#bcb9a9;margin-bottom:7px}.rc-finance-cell strong{font-size:19px;color:#f1ddbd}
 @media(max-width:600px){.rc-finance-grid{grid-template-columns:1fr}}
@@ -4121,7 +4126,7 @@ items=readLocal();render();fetchRemote();
 async function rcLoadFilmFinance(f){
  const body=document.getElementById('detailBody');if(!body)return;
  const panel=document.createElement('section');panel.className='panel rc-film-finance';
- panel.innerHTML='<h3>💰 Budget en opbrengst</h3><div class="rc-finance-grid"><div class="rc-finance-cell"><small>Productiebudget</small><strong>Ophalen…</strong></div><div class="rc-finance-cell"><small>Wereldwijde bioscoopopbrengst</small><strong>Ophalen…</strong></div></div><small style="display:block;margin-top:9px;opacity:.7">Bron: TMDB · bedragen in Amerikaanse dollars</small>';
+ panel.innerHTML='<div class="rc-finance-head"><h3>💰 Budget en opbrengst</h3><button type="button" class="rc-currency-toggle" aria-label="Wissel tussen dollars en euro’s">€ EUR</button></div><div class="rc-finance-grid"><div class="rc-finance-cell"><small>Productiebudget</small><strong>Ophalen…</strong></div><div class="rc-finance-cell"><small>Wereldwijde bioscoopopbrengst</small><strong>Ophalen…</strong></div></div><small style="display:block;margin-top:9px;opacity:.7">Bron: TMDB · bedragen in Amerikaanse dollars</small>';
  body.appendChild(panel);
  const cells=panel.querySelectorAll('.rc-finance-cell strong');
  const money=n=>Number.isFinite(Number(n))&&Number(n)>0?'$ '+Number(n).toLocaleString('nl-NL'):'Niet beschikbaar';
@@ -4133,7 +4138,29 @@ async function rcLoadFilmFinance(f){
   if(!r.ok)throw Error('Niet beschikbaar');
   const d=await r.json();
   if(!panel.isConnected)return;
-  cells[0].textContent=money(d.budget);cells[1].textContent=money(d.revenue);
+  const amounts=[d.budget,d.revenue];
+  const note=panel.querySelector('small[style]');
+  const toggle=panel.querySelector('.rc-currency-toggle');
+  const paint=(currency,rate=1)=>{
+   cells.forEach((cell,i)=>{
+    const n=Number(amounts[i]);
+    cell.textContent=Number.isFinite(n)&&n>0?new Intl.NumberFormat('nl-NL',{style:'currency',currency,maximumFractionDigits:0}).format(n*rate):'Niet beschikbaar';
+   });
+  };
+  paint('USD');
+  toggle.onclick=async()=>{
+   if(toggle.dataset.currency==='EUR'){toggle.dataset.currency='USD';toggle.textContent='€ EUR';paint('USD');note.textContent='Bron: TMDB · oorspronkelijke bedragen in Amerikaanse dollars';return}
+   toggle.disabled=true;toggle.textContent='Koers ophalen…';
+   try{
+    const fx=await fetch('https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR',{signal:AbortSignal.timeout(7000)});
+    if(!fx.ok)throw Error('Geen wisselkoers beschikbaar');
+    const data=await fx.json();const rate=Number(data.rates?.EUR);
+    if(!Number.isFinite(rate)||rate<=0)throw Error('Ongeldige wisselkoers');
+    toggle.dataset.currency='EUR';toggle.textContent='$ USD';paint('EUR',rate);
+    note.textContent='Bron: TMDB · omgerekend met USD/EUR-koers van '+String(data.date||'Frankfurter')+'. Historische filmbudgetten zijn niet voor inflatie gecorrigeerd.';
+   }catch(err){note.textContent='Omrekenen naar euro mislukt. Bedragen blijven in dollars.'}
+   finally{toggle.disabled=false;if(toggle.dataset.currency!=='EUR')toggle.textContent='€ EUR'}
+  };
  }catch(_){if(panel.isConnected)cells.forEach(c=>c.textContent='Niet beschikbaar');}
 }
 </script>
