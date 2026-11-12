@@ -1022,7 +1022,7 @@ button:active{transform:scale(.975)}
 <div class="add-film-grid"><div><label for="newFilmTitle">Filmtitel *</label><input id="newFilmTitle" autocomplete="off" placeholder="Bijvoorbeeld The Godfather" required></div><div><label for="newFilmYear">Jaar *</label><input id="newFilmYear" type="number" min="1880" max="2100" placeholder="1972" required></div></div>
 <div class="add-film-actions"><button id="lookupNewFilm" type="button">⌕ Filmgegevens automatisch ophalen</button></div>
 <div class="add-film-grid"><div><label for="newFilmDirector">Regisseur</label><input id="newFilmDirector"></div><div><label for="newFilmGenres">Genres</label><input id="newFilmGenres" placeholder="Drama | Crime"></div><div><label for="newFilmRuntime">Speelduur standaardversie (min)</label><input id="newFilmRuntime" type="number" min="1" placeholder="Automatisch ingevuld, aanpasbaar"></div><div><label for="newFilmLanguage">Gesproken taal</label><input id="newFilmLanguage" placeholder="Engels"></div><div><label for="newFilmSubtitles">Ondertiteling op jouw uitgave *</label><input id="newFilmSubtitles" placeholder="Nederlands | Engels of Geen" required></div><div><label for="newFilmImdb">IMDb-rating (optioneel)</label><input id="newFilmImdb" type="number" step="0.1" min="0" max="10"></div><div><label for="newFilmMyRating">Mijn rating (optioneel, 0–10)</label><input id="newFilmMyRating" type="number" step="0.5" min="0" max="10" placeholder="Bijv. 8,5"></div><div><label for="newFilmLetterboxd">Letterboxd-rating (optioneel, 0–5)</label><input id="newFilmLetterboxd" type="number" step="0.1" min="0" max="5"></div></div>
-<div class="add-film-grid"><div><label for="newFilmPriorWatches">Aantal keer eerder bekeken</label><input id="newFilmPriorWatches" type="number" min="0" max="100000" step="1" value="0" placeholder="0"></div></div><p class="add-film-note">Ook kijkbeurten van vóór je aankoop tellen mee in je totaal. Hiervoor worden geen datums aan je kijkgeschiedenis toegevoegd.</p>
+<div class="add-film-grid"><div><label for="newFilmPriorWatches">Eerdere kijkbeurten</label><input id="newFilmPriorWatches" type="number" min="0" max="100000" step="1" value="0" placeholder="0"></div></div><p class="add-film-note">Vul alleen eerdere kijkbeurten in die niet afzonderlijk in je kijkgeschiedenis staan. Nieuwe kijkbeurten via Film bekeken tel je hier niet bij op.</p>
 <label for="newFilmCast">Acteurs (optioneel)</label><textarea id="newFilmCast" placeholder="Acteur 1 | Acteur 2"></textarea>
 <h3>🎞️ Versies / cuts</h3><p class="add-film-note">De normale versie krijgt automatisch de filmtitel en standaard speelduur. Je kunt beide wijzigen en met + een extra cut toevoegen.</p><div id="newFilmCuts"></div><button type="button" id="addNewCut" class="add-row-btn">＋ Extra versie / cut</button>
 <h3>💿 Mijn fysieke uitgaven</h3><p class="add-film-note">Vul je eigen uitgave(n) in. Een extra uitgave kun je toevoegen met +.</p><div id="newFilmEditions"></div><button type="button" id="addNewEdition" class="add-row-btn">＋ Extra fysieke uitgave</button>
@@ -3062,7 +3062,7 @@ function addEdition(existing=null){
  el('editFilmButton').onclick=()=>{
   if(!adminSession||activeDetailId<0)return;const f=DATA.films[activeDetailId],id=window.__supabaseFilmIds?.[activeDetailId];if(!id)return;
   reset();explicitEditionRemovals.clear();editingId=id;el('addFilmTitle').textContent='✏️ Film bewerken';el('saveNewFilm').textContent='Wijzigingen opslaan';
-  for(const [field,value] of Object.entries({newFilmTitle:f.title,newFilmYear:f.year,newFilmDirector:f.director,newFilmGenres:f.genres,newFilmRuntime:f.runtime,newFilmLanguage:f.language,newFilmSubtitles:f.subtitles,newFilmImdb:f.imdb,newFilmMyRating:f.rating,newFilmLetterboxd:f.letterboxd,newFilmCast:f.cast,newFilmPriorWatches:excelViewingTotal(f.title,f.year)??f._priorWatches??0}))el(field).value=value??'';
+  for(const [field,value] of Object.entries({newFilmTitle:f.title,newFilmYear:f.year,newFilmDirector:f.director,newFilmGenres:f.genres,newFilmRuntime:f.runtime,newFilmLanguage:f.language,newFilmSubtitles:f.subtitles,newFilmImdb:f.imdb,newFilmMyRating:f.rating,newFilmLetterboxd:f.letterboxd,newFilmCast:f.cast,newFilmPriorWatches:f._priorWatches??0}))el(field).value=value??'';
   el('newFilmCuts').innerHTML='';el('newFilmEditions').innerHTML='';
   const existingCuts=f.cuts?.length?f.cuts:f.editions.map(ed=>({title:ed.title||f.title,runtime:ed.runtime||f.runtime}));
   for(const c of existingCuts){addCut(c.title,c.runtime);const row=el('newFilmCuts').lastElementChild;row.dataset.dbId=c.dbId||'';row.dataset.watchOffset=String(c.watchOffset||0);row.querySelector('.cut-watches').value=String(Math.max(0,(existingCuts.length===1 && f.editions.length===1) ? ((editionWatchCounts(f).editions.get(String(f.editions[0].dbId))||0)+Number(f.editions[0].watchOffset||0)) : ((editionWatchCounts(f).cuts.get(cutName(c.title,f.title).toLocaleLowerCase('nl-NL'))||0)+Number(c.watchOffset||0))));}
@@ -3148,7 +3148,7 @@ function addEdition(existing=null){
   const title=val('newFilmTitle'),year=Number(val('newFilmYear')),runtime=Number(val('newFilmRuntime'));
   if(!title||!Number.isInteger(year)||year<1880||year>2100){status.textContent='Vul een filmtitel en geldig jaar in.';return}
   if(val('newFilmMyRating')&&(Number(val('newFilmMyRating'))<0||Number(val('newFilmMyRating'))>10)){status.textContent='Mijn rating moet tussen 0 en 10 liggen.';return}
-  const priorWatches=Number(val('newFilmPriorWatches'));if(!Number.isSafeInteger(priorWatches)||priorWatches<0||priorWatches>100000){status.textContent='Vul een geldig aantal keer bekeken in (0 of meer).';return}
+  const priorWatches=Number(val('newFilmPriorWatches'));if(!Number.isSafeInteger(priorWatches)||priorWatches<0||priorWatches>100000){status.textContent='Vul een geldig aantal eerdere kijkbeurten in (0 of meer).';return}
   if(!val('newFilmSubtitles')){status.textContent='Vul de ondertiteling van jouw uitgave in (of Geen).';return}
   const cutRows=[...el('newFilmCuts').querySelectorAll('.add-film-row')];const cuts=cutRows.map(r=>({title:r.querySelector('.cut-title').value.trim()||title,runtime:Number(r.querySelector('.cut-runtime').value),dbId:r.dataset.dbId||null,manual:r.querySelector('.cut-watches').value}));
   if(cuts.some(c=>!Number.isInteger(c.runtime)||c.runtime<1)){status.textContent='Vul voor iedere versie een geldige speelduur in.';return}
@@ -3177,7 +3177,7 @@ function addEdition(existing=null){
    if(duplicate&&!editingId)throw Error('Deze film staat al in je collectie. Voeg een nieuwe fysieke uitgave bij die bestaande film toe in plaats van een dubbele film.');
    const token=await adminAccessToken();
    const film={title,release_year:year,director:val('newFilmDirector'),genres:val('newFilmGenres'),runtime:runtime>0?runtime:cuts[0].runtime,language:val('newFilmLanguage'),subtitles:val('newFilmSubtitles'),cast_members:val('newFilmCast')};
-   if(!editingId||excelViewingTotal(title,year)===undefined)film.prior_watch_count=priorWatches;
+   film.prior_watch_count=priorWatches;
    film.imdb_rating=val('newFilmImdb')?Number(val('newFilmImdb')):null;film.my_rating=val('newFilmMyRating')?Number(val('newFilmMyRating')):null;film.letterboxd_rating=val('newFilmLetterboxd')?Number(val('newFilmLetterboxd')):null;
    if(lookupInfo?.poster_url&&/^https:\/\/image\.tmdb\.org\/t\/p\//.test(lookupInfo.poster_url))film.poster_url=lookupInfo.poster_url;
    if(!editingId&&lookupInfo&&Number.isSafeInteger(Number(lookupInfo.tmdb_id))&&Number(lookupInfo.tmdb_id)>0){film.tmdb_id=Number(lookupInfo.tmdb_id);if(/^tt\d+$/.test(String(lookupInfo.imdb_id||'')))film.imdb_id=lookupInfo.imdb_id;}
@@ -4180,6 +4180,8 @@ async function rcLoadFilmFinance(f){
    }catch(err){note.textContent='Omrekenen naar euro mislukt. Bedragen blijven in dollars.'}
    finally{toggle.disabled=false;if(toggle.dataset.currency!=='EUR')toggle.textContent='€ EUR'}
   };
+  // Standaard euro tonen; bij koersfout dollars behouden.
+  toggle.click();
  }catch(_){if(panel.isConnected)cells.forEach(c=>c.textContent='Niet beschikbaar');}
 }
 </script>
