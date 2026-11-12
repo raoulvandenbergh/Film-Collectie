@@ -1237,7 +1237,24 @@ const WATCH_KEY='filmArchiveExtraWatchesV8';
 let extraWatches=[];
 try{const stored=JSON.parse(localStorage.getItem(WATCH_KEY)||'[]');if(Array.isArray(stored))extraWatches=stored.filter(x=>x&&typeof x.title==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x.date))}catch(e){}
 const RATING_KEY='filmarchive_rating_overrides_v1';let ratingOverrides={};try{const r=JSON.parse(localStorage.getItem(RATING_KEY)||'{}');if(r&&typeof r==='object'&&!Array.isArray(r))ratingOverrides=r}catch(e){}
-const filmRating=f=>window.__supabaseFilmIds?.[DATA.films.indexOf(f)]!=null?f.rating:(ratingOverrides[f.title]!==undefined?ratingOverrides[f.title]:f.rating);
+// Laatste beoordeelde kijkbeurt is leidend voor de zichtbare filmrating.
+function latestWatchRating(f){
+ const filmIndex=DATA.films.indexOf(f);
+ if(filmIndex<0||!Array.isArray(DATA.history))return null;
+ const rows=DATA.history.filter(h=>{
+  if(h._linkedFilmIndex!=null)return Number(h._linkedFilmIndex)===filmIndex;
+  return diaryFilmId(h.title,h._year)===filmIndex;
+ }).filter(h=>h.rating!==null&&h.rating!==undefined&&String(h.rating).trim()!==''&&Number.isFinite(Number(String(h.rating).replace(',','.'))));
+ rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b._createdAt||'').localeCompare(String(a._createdAt||''))||Number(b._sourceIndex||0)-Number(a._sourceIndex||0));
+ return rows.length?Number(String(rows[0].rating).replace(',','.')):null;
+}
+const filmRating=f=>{
+ if(window.__supabaseFilmIds?.[DATA.films.indexOf(f)]!=null){
+  const latest=latestWatchRating(f);
+  return latest!==null?latest:f.rating;
+ }
+ return ratingOverrides[f.title]!==undefined?ratingOverrides[f.title]:f.rating;
+};
 const allHistory=()=>DATA.history.concat(extraWatches);
 const normTitle=t=>String(t||'').toLocaleLowerCase('nl-NL').trim().replace(/\s*\((?:black & white version|director['’]s cut|extended cut|theatrical cut|unrated cut|final cut|extended edition|redux cut|international cut|theatrical cut with alternative end|original uncut version|preview cut|the 1998 reconstruction)\)$/i,'').trim();
 // Eenduidige filmtitelherkenning, ook bij Letterboxd- en Excel-schrijfwijzen.
@@ -2522,7 +2539,8 @@ async function synchronizeDiary(indicator,filmCount,editionCount){
   extraWatches=[];
   // The Excel-era aggregate watched flags are not authoritative for all historical rows.
   DATA.films.forEach(f=>{f.seen=Number(f.watches)>0||filmHistory(f).length>0;});
-  updateDiary();updateCounts();
+  updateDiary();updateCounts();render();
+  if(document.getElementById('detail')?.classList.contains('active')&&activeDetailId>=0)detail(DATA.films[activeDetailId]);
   if(typeof updateStatistics==='function')updateStatistics();
   indicator.textContent=`✓ Supabase verbonden: ${filmCount} films, ${editionCount} uitgaven en ${records.length} kijkbeurten.`;
  }catch(err){
