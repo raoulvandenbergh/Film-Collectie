@@ -4272,6 +4272,25 @@ async function rcLoadFilmTrivia(f){
     const p=document.createElement('p');p.textContent=item.content;row.append(p);
     if(item.source_url){const a=document.createElement('a');a.href=item.source_url;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Bekijk bron';row.append(a)}
     if(window.__filmAdminSignedIn){
+     const edit=document.createElement('button');edit.type='button';edit.textContent='✎ Bewerken';
+     edit.onclick=()=>{
+      if(row.querySelector('form'))return;
+      const form=document.createElement('form');form.className='rc-trivia-form';
+      const field=document.createElement('textarea');field.required=true;field.maxLength=1200;field.value=item.content;
+      const sourceField=document.createElement('input');sourceField.type='url';sourceField.placeholder='Bronlink (optioneel)';sourceField.value=item.source_url||'';
+      const save=document.createElement('button');save.type='submit';save.textContent='Wijzigingen opslaan';
+      const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Annuleren';cancel.onclick=()=>form.remove();
+      form.append(field,sourceField,save,cancel);row.append(form);field.focus();
+      form.onsubmit=async e=>{
+       e.preventDefault();if(!field.value.trim())return;
+       save.disabled=true;
+       try{
+        await adminRest('film_trivia','PATCH',{content:field.value.trim(),source_url:sourceField.value.trim()||null},await adminAccessToken(),'?id=eq.'+encodeURIComponent(item.id));
+        await render();
+       }catch(err){alert('Bewerken mislukt: '+err.message);save.disabled=false}
+      };
+     };
+     row.append(edit);
      const del=document.createElement('button');del.type='button';del.textContent='Verwijderen';del.onclick=async()=>{
       if(!confirm('Dit weetje verwijderen?'))return;
       try{await adminRest('film_trivia','DELETE',null,await adminAccessToken(),'?id=eq.'+encodeURIComponent(item.id));await render()}catch(e){alert('Verwijderen mislukt: '+e.message)}
