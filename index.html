@@ -2050,6 +2050,7 @@ function detail(f){
  ? (watchCounts.editions.get(String(f.editions[0].dbId))||0)+Number(f.editions[0].watchOffset||0)
  : (watchCounts.cuts.get(cutName(c.title,f.title).toLocaleLowerCase('nl-NL'))||0)+Number(c.watchOffset||0)),discGroups(f).some(g=>g.name===cutName(c.title,f.title)&&g.seen))}${esc(displayFilmTitle(c.title))}${c.runtimes.length?' ('+c.runtimes.map(n=>n+' min').join(' / ')+')':''}</div>`).join('')}</section></div>
  <section class="panel film-director"><h3>🎥 Regisseur${rcDirectorNames(f.director).length>1?'s':''}</h3><div id="directorCards" class="rc-director-cards">${rcDirectorNames(f.director).map((name,i)=>`<button type="button" class="director-card" data-director-index="${i}"><span class="director-photo" ${i===0?'id="directorPhoto"':''} style="display:flex;align-items:center;justify-content:center">◈</span><span><strong>${esc(name)}</strong><small>Bekijk films van deze regisseur →</small></span></button>`).join('')}</div></section><section class="panel film-cast"><div class="film-cast-head"><h3 style="margin:0">🎭 Acteurs</h3><button class="cast-toggle" id="castToggle" style="display:none">Toon volledige cast</button></div><div class="cast-grid" id="castGrid"></div><p class="muted" id="castInfo" style="font-size:12px;margin-bottom:0"></p></section><section class="panel country-panel"><h3>🌍 Landen van herkomst</h3><div class="country-chips" id="filmCountryChips"><span class="country-hint">Productielanden ophalen…</span></div></section>${rcAVShowcase(f.editions||[])}`;
+ rcLoadFilmFinance(f);
  document.querySelectorAll('[data-open-film-history]').forEach(el=>{el.addEventListener('click',()=>showFilmDiary(f));el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showFilmDiary(f)}})});
  const actions=document.querySelector('.detail-topbar .detail-actions');let trailerPanel=document.querySelector('#detail .trailer-panel');if(!trailerPanel){trailerPanel=document.createElement('section');trailerPanel.className='panel trailer-panel';trailerPanel.innerHTML='<h3>🎬 Trailer</h3><div class="trailer-box" id="trailerBox">Trailer wordt opgehaald via TMDB…</div>';actions.append(trailerPanel)}else{$('trailerBox').textContent='Trailer wordt opgehaald via TMDB…'}syncIPadTrailerPlacement();$('changeFilmPoster').hidden=!adminSession;$('changeFilmPoster').style.display=adminSession?'':'none';$('changeFilmPoster').addEventListener('click',()=>choosePoster(f,id));document.querySelectorAll('#directorCards [data-director-index]').forEach(card=>{const name=rcDirectorNames(f.director)[Number(card.dataset.directorIndex)];card.onclick=()=>filterPerson(name,card.querySelector('img')?.src||'')});$('soundtrackButton').onclick=()=>openFilmSoundtrack(f);$('spotifyEditLink').hidden=!adminSession;$('spotifyEditLink').style.display=adminSession?'':'none';$('spotifyEditLink').onclick=()=>{if(adminSession)configureSpotify(f)};show('detail');watchPosters();renderCast(f,id);renderFilmCountries(f,id);loadPublicTrailer(f,id);
 }
@@ -3031,7 +3032,7 @@ function addEdition(existing=null){
   const cuts=[...el('newFilmCuts').querySelectorAll('.add-film-row')].map((r,i)=>({title:r.querySelector('.cut-title').value.trim()||val('newFilmTitle')||'Standaardversie',i}));
   for(const sel of el('newFilmEditions').querySelectorAll('.edition-cut')){const selected=[...sel.selectedOptions].map(o=>o.value);sel.innerHTML=cuts.map(c=>`<option value="${c.i}">${escapeHtml(c.title)}</option>`).join('');for(const o of sel.options)o.selected=selected.includes(o.value);if(![...sel.selectedOptions].length&&sel.options.length)sel.options[0].selected=true;}
  }
- function reset(){explicitEditionRemovals.clear();editingId=null;el('addFilmTitle').textContent='＋ Film toevoegen';el('saveNewFilm').textContent='Film opslaan in collectie';lookupInfo=null;for(const id of ['newFilmTitle','newFilmYear','newFilmDirector','newFilmGenres','newFilmRuntime','newFilmLanguage','newFilmSubtitles','newFilmImdb','newFilmMyRating','newFilmLetterboxd','newFilmCast'])el(id).value='';el('newFilmPriorWatches').value='0';el('newFilmCuts').innerHTML='';el('newFilmEditions').innerHTML='';addCut();addEdition();status.textContent='';}
+ function reset(){explicitEditionRemovals.clear();editingId=null;el('addFilmTitle').textContent='＋ Film toevoegen';el('saveNewFilm').textContent='Film opslaan in collectie';lookupInfo=null;window.__rcLatestLookup=null;for(const id of ['newFilmTitle','newFilmYear','newFilmDirector','newFilmGenres','newFilmRuntime','newFilmLanguage','newFilmSubtitles','newFilmImdb','newFilmMyRating','newFilmLetterboxd','newFilmCast'])el(id).value='';el('newFilmPriorWatches').value='0';el('newFilmCuts').innerHTML='';el('newFilmEditions').innerHTML='';addCut();addEdition();status.textContent='';}
  function close(){dlg.hidden=true;}
  el('addFilmButton').onclick=()=>{if(!adminSession)return;reset();dlg.hidden=false;el('newFilmTitle').focus()};
  el('editFilmButton').onclick=()=>{
@@ -3088,6 +3089,8 @@ function addEdition(existing=null){
    const response=await fetch(SUPABASE_URL+'/functions/v1/film-metadata',{method:'POST',headers:{'apikey':SUPABASE_PUBLISHABLE_KEY,'Authorization':'Bearer '+SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:JSON.stringify({title,year:year?Number(year):null})});
    const result=await response.json().catch(()=>({}));if(!response.ok)throw Error(result.error||'HTTP '+response.status);
    lookupInfo=result;
+   window.__rcLatestLookup={title:result.title||title,year:String(result.year||year||""),tmdb_id:result.tmdb_id||null};
+   document.dispatchEvent(new Event("rc-metadata-looked-up"));
    const fill=(id,value)=>{if(value!==undefined&&value!==null&&value!=='')el(id).value=String(value)};
    fill('newFilmTitle',result.title);fill('newFilmYear',result.year);fill('newFilmDirector',Array.isArray(result.directors)&&result.directors.length?result.directors.join(' | '):result.director);
    // If the metadata function returns only one director, check TMDB credits directly
@@ -4065,9 +4068,33 @@ items=readLocal();render();fetchRemote();
     const title=document.getElementById('newFilmTitle')?.value.trim()||'';
     const year=document.getElementById('newFilmYear')?.value.trim()||'';
     const film=(typeof DATA!=='undefined'?DATA.films:[]).find(f=>f.title===title&&String(f.year)===year);
-    link.href=film&&typeof letterboxdFilmUrl==='function'?letterboxdFilmUrl(film):'https://letterboxd.com/search/'+encodeURIComponent([title,year].filter(Boolean).join(' '))+'/';
+    const recent=window.__rcLatestLookup;
+    const matchingRecent=recent&&recent.title?.toLocaleLowerCase('nl-NL')===title.toLocaleLowerCase('nl-NL')&&String(recent.year)===year;
+    const tmdbId=matchingRecent?recent.tmdb_id:film?._tmdbId;
+    link.href=tmdbId?'https://letterboxd.com/tmdb/'+encodeURIComponent(tmdbId)+'/':'#';
+    link.dataset.needsLookup=tmdbId?'0':'1';
     link.style.pointerEvents=title?'':'none';link.style.opacity=title?'1':'.5';
    };
+   link.addEventListener('click',async event=>{
+    if(link.dataset.needsLookup!=='1')return;
+    event.preventDefault();
+    const title=document.getElementById('newFilmTitle')?.value.trim();
+    const year=document.getElementById('newFilmYear')?.value.trim();
+    if(!title)return;
+    const newTab=window.open('about:blank','_blank');
+    try{
+     const r=await fetch('https://jfgojgbyorumeefgzvwd.supabase.co/functions/v1/film-metadata',{
+      method:'POST',headers:{'apikey':'sb_publishable_EB27kcAdGy--KkcL6wl-cw__yJqVSJR','Content-Type':'application/json'},
+      body:JSON.stringify({title,year:year?Number(year):null})
+     });
+     if(!r.ok)throw Error('Film niet gevonden');
+     const data=await r.json();if(!data.tmdb_id)throw Error('TMDB-ID ontbreekt');
+     const url='https://letterboxd.com/tmdb/'+encodeURIComponent(data.tmdb_id)+'/';
+     link.href=url;link.dataset.needsLookup='0';
+     if(newTab)newTab.location.replace(url);else window.location.href=url;
+    }catch(e){if(newTab)newTab.close();alert('De exacte Letterboxd-filmpagina kon niet worden gevonden. Probeer eerst Filmgegevens automatisch ophalen.');}
+   });
+   document.addEventListener('rc-metadata-looked-up',update);
    for(const id of ['newFilmTitle','newFilmYear'])document.getElementById(id)?.addEventListener('input',update);
    document.getElementById('editFilmButton')?.addEventListener('click',()=>setTimeout(update,0));
    document.getElementById('addFilmButton')?.addEventListener('click',()=>setTimeout(update,0));
@@ -4083,4 +4110,31 @@ items=readLocal();render();fetchRemote();
  observer.observe(document.body,{childList:true,subtree:true});
  enhance();
 })();
-</script></body></html>
+</script>
+<style id="rc-film-finance-style">
+.rc-film-finance{margin-top:20px}.rc-finance-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+.rc-finance-cell{border:1px solid #6c6858;border-radius:9px;padding:14px;background:#102622}
+.rc-finance-cell small{display:block;color:#bcb9a9;margin-bottom:7px}.rc-finance-cell strong{font-size:19px;color:#f1ddbd}
+@media(max-width:600px){.rc-finance-grid{grid-template-columns:1fr}}
+</style>
+<script id="rc-film-finance-script">
+async function rcLoadFilmFinance(f){
+ const body=document.getElementById('detailBody');if(!body)return;
+ const panel=document.createElement('section');panel.className='panel rc-film-finance';
+ panel.innerHTML='<h3>💰 Budget en opbrengst</h3><div class="rc-finance-grid"><div class="rc-finance-cell"><small>Productiebudget</small><strong>Ophalen…</strong></div><div class="rc-finance-cell"><small>Wereldwijde bioscoopopbrengst</small><strong>Ophalen…</strong></div></div><small style="display:block;margin-top:9px;opacity:.7">Bron: TMDB · bedragen in Amerikaanse dollars</small>';
+ body.appendChild(panel);
+ const cells=panel.querySelectorAll('.rc-finance-cell strong');
+ const money=n=>Number.isFinite(Number(n))&&Number(n)>0?'$ '+Number(n).toLocaleString('nl-NL'):'Niet beschikbaar';
+ try{
+  const r=await fetch('https://jfgojgbyorumeefgzvwd.supabase.co/functions/v1/film-metadata',{
+   method:'POST',headers:{'apikey':'sb_publishable_EB27kcAdGy--KkcL6wl-cw__yJqVSJR','Content-Type':'application/json'},
+   body:JSON.stringify(f._tmdbId?{tmdb_id:f._tmdbId}:{title:f.title,year:Number(f.year)||null})
+  });
+  if(!r.ok)throw Error('Niet beschikbaar');
+  const d=await r.json();
+  if(!panel.isConnected)return;
+  cells[0].textContent=money(d.budget);cells[1].textContent=money(d.revenue);
+ }catch(_){if(panel.isConnected)cells.forEach(c=>c.textContent='Niet beschikbaar');}
+}
+</script>
+</body></html>
