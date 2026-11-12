@@ -2068,6 +2068,7 @@ function detail(f){
  : (watchCounts.cuts.get(cutName(c.title,f.title).toLocaleLowerCase('nl-NL'))||0)+Number(c.watchOffset||0)),discGroups(f).some(g=>g.name===cutName(c.title,f.title)&&g.seen))}${esc(displayFilmTitle(c.title))}${c.runtimes.length?' ('+c.runtimes.map(n=>n+' min').join(' / ')+')':''}</div>`).join('')}</section></div>
  <section class="panel film-director"><h3>🎥 Regisseur${rcDirectorNames(f.director).length>1?'s':''}</h3><div id="directorCards" class="rc-director-cards">${rcDirectorNames(f.director).map((name,i)=>`<button type="button" class="director-card" data-director-index="${i}"><span class="director-photo" ${i===0?'id="directorPhoto"':''} style="display:flex;align-items:center;justify-content:center">◈</span><span><strong>${esc(name)}</strong><small>Bekijk films van deze regisseur →</small></span></button>`).join('')}</div></section><section class="panel film-cast"><div class="film-cast-head"><h3 style="margin:0">🎭 Acteurs</h3><button class="cast-toggle" id="castToggle" style="display:none">Toon volledige cast</button></div><div class="cast-grid" id="castGrid"></div><p class="muted" id="castInfo" style="font-size:12px;margin-bottom:0"></p></section><section class="panel country-panel"><h3>🌍 Landen van herkomst</h3><div class="country-chips" id="filmCountryChips"><span class="country-hint">Productielanden ophalen…</span></div></section>${rcAVShowcase(f.editions||[])}`;
  rcLoadFilmFinance(f);
+ rcLoadFilmTrivia(f);
  document.querySelectorAll('[data-open-film-history]').forEach(el=>{el.addEventListener('click',()=>showFilmDiary(f));el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showFilmDiary(f)}})});
  const actions=document.querySelector('.detail-topbar .detail-actions');let trailerPanel=document.querySelector('#detail .trailer-panel');if(!trailerPanel){trailerPanel=document.createElement('section');trailerPanel.className='panel trailer-panel';trailerPanel.innerHTML='<h3>🎬 Trailer</h3><div class="trailer-box" id="trailerBox">Trailer wordt opgehaald via TMDB…</div>';actions.append(trailerPanel)}else{$('trailerBox').textContent='Trailer wordt opgehaald via TMDB…'}syncIPadTrailerPlacement();$('changeFilmPoster').hidden=!adminSession;$('changeFilmPoster').style.display=adminSession?'':'none';$('changeFilmPoster').addEventListener('click',()=>choosePoster(f,id));document.querySelectorAll('#directorCards [data-director-index]').forEach(card=>{const name=rcDirectorNames(f.director)[Number(card.dataset.directorIndex)];card.onclick=()=>filterPerson(name,card.querySelector('img')?.src||'')});$('soundtrackButton').onclick=()=>openFilmSoundtrack(f);$('spotifyEditLink').hidden=!adminSession;$('spotifyEditLink').style.display=adminSession?'':'none';$('spotifyEditLink').onclick=()=>{if(adminSession)configureSpotify(f)};show('detail');watchPosters();renderCast(f,id);renderFilmCountries(f,id);loadPublicTrailer(f,id);
 }
@@ -4180,6 +4181,79 @@ async function rcLoadFilmFinance(f){
    finally{toggle.disabled=false;if(toggle.dataset.currency!=='EUR')toggle.textContent='€ EUR'}
   };
  }catch(_){if(panel.isConnected)cells.forEach(c=>c.textContent='Niet beschikbaar');}
+}
+</script>
+
+<style id="rc-film-trivia-style">
+.rc-film-trivia{margin-top:16px}
+.rc-film-trivia summary{cursor:pointer;font-size:17px;font-weight:700;color:#f1ddbd}
+.rc-film-trivia summary:hover{color:#fff}
+.rc-film-trivia-content{margin-top:14px;line-height:1.7;color:#e5e0d4}
+.rc-film-trivia-content p{margin:0 0 12px}
+.rc-film-trivia-content a{color:#d8bf91}
+</style>
+<script id="rc-film-trivia-script">
+async function rcLoadFilmTrivia(f){
+ const body=document.getElementById('detailBody');
+ if(!body)return;
+ const panel=document.createElement('details');
+ panel.className='panel rc-film-trivia';
+ const summary=document.createElement('summary');
+ summary.textContent='🎬 Wist je dat…? · achtergrond en filmfeitjes';
+ const content=document.createElement('div');
+ content.className='rc-film-trivia-content';
+ content.textContent='Klik om achtergrondinformatie over deze film op te halen.';
+ panel.append(summary,content);
+ body.appendChild(panel);
+ let loaded=false;
+ panel.addEventListener('toggle',async()=>{
+  if(!panel.open||loaded)return;
+  loaded=true;
+  content.textContent='Filmachtergrond ophalen…';
+  try{
+   const title=String(f.title||'').trim();
+   const year=String(f.year||'').trim();
+   const search=new URL('https://en.wikipedia.org/w/api.php');
+   search.searchParams.set('action','query');
+   search.searchParams.set('list','search');
+   search.searchParams.set('srsearch','intitle:"'+title.replace(/"/g,'')+'" '+year+' film');
+   search.searchParams.set('srlimit','8');
+   search.searchParams.set('format','json');
+   search.searchParams.set('origin','*');
+   const sr=await fetch(search,{signal:AbortSignal.timeout(10000)});
+   if(!sr.ok)throw Error('Wikipedia zoeken mislukt');
+   const candidates=(await sr.json())?.query?.search||[];
+   const norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+   const target=norm(title);
+   const match=candidates.find(x=>norm(x.title).includes(target)&&(!year||String(x.title).includes(year)))||
+    candidates.find(x=>norm(x.title).includes(target)&&/film/i.test(x.title));
+   if(!match)throw Error('Geen passende filmpagina');
+   const details=new URL('https://en.wikipedia.org/w/api.php');
+   details.searchParams.set('action','query');
+   details.searchParams.set('prop','extracts');
+   details.searchParams.set('explaintext','1');
+   details.searchParams.set('exintro','1');
+   details.searchParams.set('titles',match.title);
+   details.searchParams.set('format','json');
+   details.searchParams.set('origin','*');
+   const dr=await fetch(details,{signal:AbortSignal.timeout(10000)});
+   if(!dr.ok)throw Error('Wikipedia-inhoud niet bereikbaar');
+   const pages=(await dr.json())?.query?.pages||{};
+   const extract=String(Object.values(pages)[0]?.extract||'').trim();
+   if(!extract)throw Error('Geen achtergrondinformatie');
+   if(!panel.isConnected)return;
+   content.replaceChildren();
+   const p=document.createElement('p');
+   p.textContent=extract.length>1400?extract.slice(0,1400).replace(/\s+\S*$/,'')+'…':extract;
+   const source=document.createElement('a');
+   source.href='https://en.wikipedia.org/wiki/'+encodeURIComponent(match.title.replace(/ /g,'_'));
+   source.target='_blank';source.rel='noopener noreferrer';
+   source.textContent='Bron: Wikipedia · lees meer ↗';
+   content.append(p,source);
+  }catch(e){
+   if(panel.isConnected)content.textContent='Voor deze film is geen passende, controleerbare achtergrondinformatie gevonden. Er worden geen weetjes verzonnen.';
+  }
+ });
 }
 </script>
 </body></html>
