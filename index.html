@@ -4193,69 +4193,113 @@ async function rcLoadFilmFinance(f){
 .rc-film-trivia-content{margin-top:14px;line-height:1.7;color:#e5e0d4}
 .rc-film-trivia-content p{margin:0 0 12px}
 .rc-film-trivia-content a{color:#d8bf91}
+.rc-trivia-manual{border-top:1px solid #6b6558;padding:10px 0}.rc-trivia-manual button{margin-left:12px}
+.rc-trivia-form{display:grid;gap:9px;margin-top:20px}.rc-trivia-form textarea{min-height:80px;background:#1d2926;color:#fff;border:1px solid #6b6558;border-radius:6px;padding:10px}.rc-trivia-form input{background:#1d2926;color:#fff;border:1px solid #6b6558;border-radius:6px;padding:9px}.rc-trivia-form button{justify-self:start}
+.rc-film-trivia-content a{display:inline-block;margin-bottom:12px}
 </style>
 <script id="rc-film-trivia-script">
-async function rcLoadFilmTrivia(f){
- const body=document.getElementById('detailBody');
- if(!body)return;
- const panel=document.createElement('details');
- panel.className='panel rc-film-trivia';
- const summary=document.createElement('summary');
- summary.textContent='🎬 Wist je dat…? · achtergrond en filmfeitjes';
- const content=document.createElement('div');
- content.className='rc-film-trivia-content';
- content.textContent='Klik om achtergrondinformatie over deze film op te halen.';
- panel.append(summary,content);
- body.appendChild(panel);
- let loaded=false;
- panel.addEventListener('toggle',async()=>{
-  if(!panel.open||loaded)return;
-  loaded=true;
-  content.textContent='Filmachtergrond ophalen…';
-  try{
-   const title=String(f.title||'').trim();
-   const year=String(f.year||'').trim();
-   const search=new URL('https://en.wikipedia.org/w/api.php');
-   search.searchParams.set('action','query');
-   search.searchParams.set('list','search');
-   search.searchParams.set('srsearch','intitle:"'+title.replace(/"/g,'')+'" '+year+' film');
-   search.searchParams.set('srlimit','8');
-   search.searchParams.set('format','json');
-   search.searchParams.set('origin','*');
-   const sr=await fetch(search,{signal:AbortSignal.timeout(10000)});
-   if(!sr.ok)throw Error('Wikipedia zoeken mislukt');
-   const candidates=(await sr.json())?.query?.search||[];
-   const norm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-   const target=norm(title);
-   const match=candidates.find(x=>norm(x.title).includes(target)&&(!year||String(x.title).includes(year)))||
-    candidates.find(x=>norm(x.title).includes(target)&&/film/i.test(x.title));
-   if(!match)throw Error('Geen passende filmpagina');
-   const details=new URL('https://en.wikipedia.org/w/api.php');
-   details.searchParams.set('action','query');
-   details.searchParams.set('prop','extracts');
-   details.searchParams.set('explaintext','1');
-   details.searchParams.set('exintro','1');
-   details.searchParams.set('titles',match.title);
-   details.searchParams.set('format','json');
-   details.searchParams.set('origin','*');
-   const dr=await fetch(details,{signal:AbortSignal.timeout(10000)});
-   if(!dr.ok)throw Error('Wikipedia-inhoud niet bereikbaar');
-   const pages=(await dr.json())?.query?.pages||{};
-   const extract=String(Object.values(pages)[0]?.extract||'').trim();
-   if(!extract)throw Error('Geen achtergrondinformatie');
-   if(!panel.isConnected)return;
-   content.replaceChildren();
-   const p=document.createElement('p');
-   p.textContent=extract.length>1400?extract.slice(0,1400).replace(/\s+\S*$/,'')+'…':extract;
-   const source=document.createElement('a');
-   source.href='https://en.wikipedia.org/wiki/'+encodeURIComponent(match.title.replace(/ /g,'_'));
-   source.target='_blank';source.rel='noopener noreferrer';
-   source.textContent='Bron: Wikipedia · lees meer ↗';
-   content.append(p,source);
-  }catch(e){
-   if(panel.isConnected)content.textContent='Voor deze film is geen passende, controleerbare achtergrondinformatie gevonden. Er worden geen weetjes verzonnen.';
+const rcTriviaCache=new Map();
+function rcTriviaFilmKey(f){return String(f.tmdb_id||f.tmdbId||'').trim()||String(f.title||'').toLowerCase().trim()+'|'+String(f.year||'')}
+function rcTriviaApi(title,extra={}){
+ const u=new URL('https://nl.wikipedia.org/w/api.php');
+ Object.entries({action:'query',format:'json',origin:'*',...extra}).forEach(([k,v])=>u.searchParams.set(k,String(v)));
+ return u;
+}
+async function rcTriviaAutomatic(f){
+ const key=rcTriviaFilmKey(f);
+ if(rcTriviaCache.has(key))return rcTriviaCache.get(key);
+ const title=String(f.title||'').trim(),year=String(f.year||'').trim();
+ const search=rcTriviaApi('',{list:'search',srsearch:'"'+title.replace(/"/g,'')+'" '+year+' film',srlimit:'8'});
+ const sr=await fetch(search,{signal:AbortSignal.timeout(9000)});
+ if(!sr.ok)throw Error('Zoeken mislukt');
+ const results=(await sr.json())?.query?.search||[];
+ const norm=x=>String(x||'').toLocaleLowerCase('nl-NL').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+ const target=norm(title);
+ const match=results.find(x=>norm(x.title).includes(target)&&String(x.title).includes(year))||
+   results.find(x=>norm(x.title).includes(target)&&/film/i.test(x.title));
+ if(!match)return [];
+ const sectionsUrl=rcTriviaApi('',{action:'parse',page:match.title,prop:'sections'});
+ const sectionsResp=await fetch(sectionsUrl,{signal:AbortSignal.timeout(9000)});
+ if(!sectionsResp.ok)return [];
+ const sections=(await sectionsResp.json())?.parse?.sections||[];
+ const relevant=sections.filter(x=>/productie|opname|achtergrond|casting|ontwikkeling|totstandkoming|filmmuziek/i.test(x.line||'')).slice(0,2);
+ const facts=[];
+ for(const section of relevant){
+  const sectionUrl=rcTriviaApi('',{action:'parse',page:match.title,prop:'text',section:section.index});
+  const r=await fetch(sectionUrl,{signal:AbortSignal.timeout(9000)});
+  if(!r.ok)continue;
+  const html=(await r.json())?.parse?.text?.['*']||'';
+  const doc=new DOMParser().parseFromString(html,'text/html');
+  doc.querySelectorAll('sup,style,script,.mw-editsection,.reference,.reflist').forEach(n=>n.remove());
+  const paragraphs=[...doc.querySelectorAll('p')].map(x=>x.textContent.replace(/\s+/g,' ').trim()).filter(x=>x.length>=65&&x.length<=650);
+  for(const paragraph of paragraphs.slice(0,3)){
+   facts.push({text:paragraph,source:'Nederlandstalige Wikipedia',url:'https://nl.wikipedia.org/wiki/'+encodeURIComponent(match.title.replace(/ /g,'_'))});
   }
- });
+ }
+ rcTriviaCache.set(key,facts);
+ return facts;
+}
+async function rcTriviaSaved(f){
+ const key=rcTriviaFilmKey(f);
+ const url=SUPABASE_URL+'/rest/v1/film_trivia?select=id,content,source_url&film_key=eq.'+encodeURIComponent(key)+'&order=created_at.asc';
+ const r=await fetch(url,{headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+SUPABASE_PUBLISHABLE_KEY}});
+ if(!r.ok)throw Error('De Supabase-tabel film_trivia is nog niet ingesteld.');
+ return await r.json();
+}
+async function rcLoadFilmTrivia(f){
+ const body=document.getElementById('detailBody');if(!body)return;
+ const panel=document.createElement('details');panel.className='panel rc-film-trivia';
+ const summary=document.createElement('summary');summary.textContent='🎬 Wist je dat…?';
+ const content=document.createElement('div');content.className='rc-film-trivia-content';
+ content.textContent='Klik om filmfeitjes te bekijken.';
+ panel.append(summary,content);body.append(panel);
+ let loaded=false;
+ const render=async()=>{
+  content.textContent='Filmfeitjes ophalen…';
+  let automatic=[],saved=[],error='';
+  try{automatic=await rcTriviaAutomatic(f)}catch(e){error='Automatische gegevens zijn momenteel niet bereikbaar.'}
+  try{saved=await rcTriviaSaved(f)}catch(e){error='Eigen feitjes kunnen pas worden opgeslagen na het instellen van de Supabase-tabel.'}
+  if(!panel.isConnected)return;
+  content.replaceChildren();
+  if(automatic.length){
+   const h=document.createElement('h4');h.textContent='Achter de schermen';content.append(h);
+   automatic.forEach(item=>{const p=document.createElement('p');p.textContent=item.text;const a=document.createElement('a');a.href=item.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Bron: '+item.source;content.append(p,a)});
+  }
+  if(saved.length){
+   const h=document.createElement('h4');h.textContent='Extra weetjes';content.append(h);
+   saved.forEach(item=>{
+    const row=document.createElement('div');row.className='rc-trivia-manual';
+    const p=document.createElement('p');p.textContent=item.content;row.append(p);
+    if(item.source_url){const a=document.createElement('a');a.href=item.source_url;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Bekijk bron';row.append(a)}
+    if(window.__filmAdminSignedIn){
+     const del=document.createElement('button');del.type='button';del.textContent='Verwijderen';del.onclick=async()=>{
+      if(!confirm('Dit weetje verwijderen?'))return;
+      try{await adminRest('film_trivia','DELETE',null,await adminAccessToken(),'?id=eq.'+encodeURIComponent(item.id));await render()}catch(e){alert('Verwijderen mislukt: '+e.message)}
+     };row.append(del);
+    }
+    content.append(row);
+   });
+  }
+  if(!automatic.length&&!saved.length){const p=document.createElement('p');p.textContent='Voor deze film zijn nog geen controleerbare feitjes gevonden.';content.append(p)}
+  if(error){const p=document.createElement('p');p.className='muted';p.textContent=error;content.append(p)}
+  if(window.__filmAdminSignedIn){
+   const form=document.createElement('form');form.className='rc-trivia-form';
+   const label=document.createElement('label');label.textContent='Zelf een weetje toevoegen';
+   const textarea=document.createElement('textarea');textarea.required=true;textarea.maxLength=1200;textarea.placeholder='Schrijf hier een gecontroleerd filmfeitje…';
+   const source=document.createElement('input');source.type='url';source.placeholder='Bronlink (optioneel)';
+   const button=document.createElement('button');button.type='submit';button.textContent='Weetje opslaan';
+   form.append(label,textarea,source,button);content.append(form);
+   form.onsubmit=async e=>{
+    e.preventDefault();button.disabled=true;
+    try{
+     await adminRest('film_trivia','POST',{film_key:rcTriviaFilmKey(f),content:textarea.value.trim(),source_url:source.value.trim()||null},await adminAccessToken());
+     await render();
+    }catch(err){alert('Opslaan mislukt: '+err.message)}
+    finally{button.disabled=false}
+   };
+  }
+ };
+ panel.addEventListener('toggle',()=>{if(panel.open&&!loaded){loaded=true;render()}});
 }
 </script>
 </body></html>
