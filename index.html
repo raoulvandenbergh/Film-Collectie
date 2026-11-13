@@ -1937,7 +1937,7 @@ function configureSpotify(f){
 
 // Spotify Web API Authorization Code + PKCE; geen Client Secret in de website.
 const SPOTIFY_CLIENT_ID='5828240e04b34668983512b0aedf92d6';
-const SPOTIFY_REDIRECT='https://raoulvandenbergh.github.io/Film-Collectie/';
+const SPOTIFY_REDIRECT='https://raoulvandenbergh.github.io/filmcollectie/';
 const SPOTIFY_SCOPES='user-read-playback-state user-modify-playback-state';
 const SPOTIFY_TOKEN_KEY='filmCollectionSpotifyOAuthV1';
 function spotifyTokens(){try{return JSON.parse(sessionStorage.getItem(SPOTIFY_TOKEN_KEY)||'null')}catch(e){return null}}
@@ -1945,7 +1945,10 @@ function spotifySaveTokens(t){sessionStorage.setItem(SPOTIFY_TOKEN_KEY,JSON.stri
 function spotifyBase64Url(bytes){return btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
 async function spotifyHash(text){return spotifyBase64Url(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))))}
 async function spotifyLogin(){
- if(location.origin+location.pathname!==SPOTIFY_REDIRECT){alert('Open eerst de online Film Collectie op '+SPOTIFY_REDIRECT+' om Spotify te verbinden.');return}
+ const here=new URL(location.href),redirect=new URL(SPOTIFY_REDIRECT);
+ if(here.origin!==redirect.origin||here.pathname.replace(/\/+$/,'')!==redirect.pathname.replace(/\/+$/,'')){
+  alert('Open eerst Raoul’s Collectie op '+SPOTIFY_REDIRECT+' om Spotify te verbinden.');return
+ }
  const verifier=spotifyBase64Url(crypto.getRandomValues(new Uint8Array(64)));
  const state=spotifyBase64Url(crypto.getRandomValues(new Uint8Array(20)));
  sessionStorage.setItem('filmSpotifyVerifier',verifier);
