@@ -3883,6 +3883,14 @@ window.addEventListener('focus',refresh);
 .fw-feature-video span{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#622c28;padding:9px;border-radius:7px;white-space:nowrap}
 @media(max-width:900px){.fw-feature-layout{grid-template-columns:145px minmax(0,1fr)}.fw-feature-trailer{grid-column:2;grid-row:1;position:relative;margin-top:160px}.fw-feature-main{grid-column:2;grid-row:1}.fw-feature-main .fw-feature-section:first-of-type{margin-top:190px}}
 @media(max-width:600px){.fw-feature-layout{grid-template-columns:95px minmax(0,1fr);gap:13px}.fw-feature-trailer{grid-column:1/-1;grid-row:auto;margin:0}.fw-feature-main .fw-feature-section:first-of-type{margin-top:0}.fw-feature-title{font-size:28px}.fw-full-actions button{padding:10px;font-size:12px}.fw-feature-cast{grid-template-columns:repeat(3,minmax(0,1fr))}}
+</style><style id="fwPosterPreviewStyles">
+.fw-poster-preview[hidden]{display:none!important}
+.fw-poster-preview{display:flex;align-items:center;gap:15px;margin:12px 0 16px;padding:13px;border:1px solid #887248;border-radius:8px;background:#20382f;color:#e8d8b5}
+.fw-poster-preview img{display:block;width:82px;aspect-ratio:2/3;object-fit:cover;border-radius:5px;border:1px solid #b49864;background:#0a1b15;flex:none}
+.fw-poster-preview img[hidden]{display:none}
+.fw-poster-preview strong{display:block;font:normal 18px Georgia,serif;color:#f0dba8;margin-bottom:5px}
+.fw-poster-preview p{font-size:12px;line-height:1.5;margin:0;color:#c5cbbd}
+@media(max-width:560px){.fw-poster-preview img{width:68px}.fw-poster-preview{gap:12px}}
 </style><script id="film60Script">
 (()=>{
 'use strict';
@@ -3890,6 +3898,30 @@ const $=id=>document.getElementById(id),shelf=$('fwShelf'),form=$('fwForm'),dial
 const KEY='rc-filmwinkel-v1', TABLE='wishlist', prio={must:0,high:1,normal:2};
 let items=[],editing=null,remoteReady=false,remoteError=false;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Toon de gekozen poster ook tijdens toevoegen/bewerken, zonder de opmerkingen te wijzigen.
+const posterInput=form.elements.poster;
+const posterPreview=document.createElement('div');posterPreview.className='fw-poster-preview';posterPreview.id='fwPosterPreview';posterPreview.hidden=true;
+const posterImage=document.createElement('img');posterImage.alt='Gekozen filmposter';posterImage.loading='eager';
+const posterInfo=document.createElement('div');
+const posterHeading=document.createElement('strong');posterHeading.textContent='Dit wordt je filmposter';
+const posterDescription=document.createElement('p');posterDescription.textContent='Deze poster verschijnt in je Filmwinkel als je de film bewaart.';
+posterInfo.append(posterHeading,posterDescription);posterPreview.append(posterImage,posterInfo);
+posterInput.closest('label').after(posterPreview);
+function updatePosterPreview(){
+ const url=String(posterInput.value||'').trim();
+ if(!/^https:\/\/[^\s/]+\/\S+$/i.test(url)){
+  posterPreview.hidden=true;posterImage.removeAttribute('src');return;
+ }
+ posterPreview.hidden=false;posterImage.hidden=false;
+ posterHeading.textContent='Dit wordt je filmposter';
+ posterDescription.textContent='Deze poster verschijnt in je Filmwinkel als je de film bewaart.';
+ if(posterImage.getAttribute('src')!==url)posterImage.src=url;
+}
+posterImage.addEventListener('error',()=>{
+ posterImage.hidden=true;posterHeading.textContent='Poster niet te tonen';
+ posterDescription.textContent='Je kunt de poster-URL aanpassen. Als je hem bewaart, probeert de Filmwinkel de afbeelding opnieuw te laden.';
+});
+posterInput.addEventListener('input',updatePosterPreview);
 const id=()=>typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():'fw-'+Date.now()+'-'+Math.random().toString(36).slice(2);
 function readLocal(){try{const a=JSON.parse(localStorage.getItem(KEY)||'[]');return Array.isArray(a)?a:[]}catch(e){return []}}
 function store(){try{localStorage.setItem(KEY,JSON.stringify(items))}catch(e){status('Opslaan in deze browser is mislukt.')}}
@@ -4019,29 +4051,37 @@ async function lookupTMDB(){
   if(!response.ok)throw Error(result.error||'HTTP '+response.status);
   if(!result.title)throw Error('Geen filmgegevens ontvangen');
   const card=document.createElement('button');card.type='button';card.className='fw-tmdb-result';
-  const url=String(result.poster_url||'');
+  const posterFromApi=String(result.poster_url||'');
+  const posterPath=String(result.poster_path||'');
+  const url=/^https:\/\/image\.tmdb\.org\/t\/p\/[^\s]+$/i.test(posterFromApi)?posterFromApi:
+   /^\/[\w/-]+\.(?:jpg|jpeg|png|webp)$/i.test(posterPath)?'https://image.tmdb.org/t/p/w500'+posterPath:'';
   if(/^https:\/\//.test(url)){
    const img=document.createElement('img');img.src=url;img.alt='Filmposter';img.loading='lazy';card.append(img);
   }
   const info=document.createElement('span');info.className='fw-tmdb-result-info';
   const name=document.createElement('strong');name.textContent=result.title+(result.year?' ('+result.year+')':'');info.append(name);
   if(result.director){const d=document.createElement('small');d.textContent='Regie: '+result.director;info.append(d)}
-  const note=document.createElement('small');note.textContent='Klik om deze film over te nemen';info.append(note);card.append(info);
-  card.onclick=()=>{
+  const note=document.createElement('small');note.textContent='Gevonden via TMDB · gegevens automatisch ingevuld';info.append(note);card.append(info);
+  const applyMovieResult=()=>{
    form.elements.title.value=result.title;
    if(result.year)form.elements.year.value=result.year;
-   if(/^https:\/\//.test(url))form.elements.poster.value=url;
-   if(result.overview&&!form.elements.notes.value.trim())form.elements.notes.value=result.overview;
-   status.textContent='✓ Filmgegevens overgenomen. Controleer de gewenste uitgave en bewaar.';
+   if(url)form.elements.poster.value=url;
+   updatePosterPreview();
+  };
+  card.onclick=()=>{
+   applyMovieResult();
+   status.textContent='✓ Filmgegevens'+(url?' en poster':'')+' overgenomen. Controleer je gewenste uitgave.';
    results.hidden=true;results.replaceChildren();
   };
   results.append(card);results.hidden=false;
-  status.textContent='Film gevonden! Kies de film hieronder.';
+  // Het film-metadata-antwoord bevat al één gevonden film: direct overnemen.
+  applyMovieResult();
+  status.textContent=url?'✓ Film én poster automatisch ingevuld. Controleer de gevonden film hieronder.':'✓ Filmgegevens ingevuld. Geen poster beschikbaar via TMDB; je kunt zelf een poster-URL invoeren.';
  }catch(err){status.textContent='Zoeken niet gelukt: '+err.message}
  finally{btn.disabled=false}
 }
 function updateEditionOther(){const other=form.elements.edition.value==='Anders';$('fwEditionOtherWrap').hidden=!other;form.elements.edition_other.required=other;}form.elements.edition.addEventListener('change',updateEditionOther);$('fwTmdbLookup').onclick=lookupTMDB;
-function open(x){editing=x?.id||null;$('fwTmdbStatus').textContent='';$('fwTmdbResults').hidden=true;$('fwTmdbResults').replaceChildren();form.reset();$('fwDialogTitle').textContent=x?'Filmwens aanpassen':'Film toevoegen';if(x)for(const field of ['title','year','format','priority','price','shop','poster','notes'])form.elements[field].value=x[field]??'';const legacy=['Steelbook','Speciale editie','Anders'].includes(x?.format)?x.format:null;if(legacy)form.elements.format.value='Blu-ray';const ed=x?.edition||legacy||'Standaard';const choices=[...form.elements.edition.options].map(o=>o.value);form.elements.edition.value=choices.includes(ed)?ed:'Anders';form.elements.edition_other.value=choices.includes(ed)?'':ed;updateEditionOther();dialog.showModal()}
+function open(x){editing=x?.id||null;$('fwTmdbStatus').textContent='';$('fwTmdbResults').hidden=true;$('fwTmdbResults').replaceChildren();form.reset();$('fwDialogTitle').textContent=x?'Filmwens aanpassen':'Film toevoegen';if(x)for(const field of ['title','year','format','priority','price','shop','poster','notes'])form.elements[field].value=x[field]??'';const legacy=['Steelbook','Speciale editie','Anders'].includes(x?.format)?x.format:null;if(legacy)form.elements.format.value='Blu-ray';const ed=x?.edition||legacy||'Standaard';const choices=[...form.elements.edition.options].map(o=>o.value);form.elements.edition.value=choices.includes(ed)?ed:'Anders';form.elements.edition_other.value=choices.includes(ed)?'':ed;updateEditionOther();updatePosterPreview();dialog.showModal()}
 async function remove(x,bought){if(!confirm(bought?'Heb je deze film gekocht en wil je hem uit je verlanglijst verwijderen? Voeg hem daarna zelf toe aan je collectie.':'Deze film uit de verlanglijst verwijderen?'))return;items=items.filter(y=>y.id!==x.id);store();render();const ok=await writeRemote(x,'DELETE');if(ok)status(bought?'Veel plezier met je nieuwe film! Vergeet hem niet toe te voegen aan je collectie.':'Film verwijderd uit de verlanglijst.');else if(!remoteReady)status('Film verwijderd op dit apparaat.');}
 $('fwAdd').onclick=()=>open();$('fwCancel').onclick=()=>dialog.close();$('fwFilter').onchange=render;$('fwSort').onchange=render;
 form.addEventListener('submit',async e=>{e.preventDefault();const data=new FormData(form),old=items.find(x=>x.id===editing);const title=String(data.get('title')||'').trim();if(!title)return;const x={id:old?.id||id(),title,year:data.get('year')?Number(data.get('year')):null,format:String(data.get('format')||'Blu-ray'),edition:String(data.get('edition')==='Anders'?data.get('edition_other')||'Anders':data.get('edition')||'Standaard').trim().slice(0,100),priority:String(data.get('priority')||'normal'),price:data.get('price')!==''?Number(data.get('price')):null,shop:String(data.get('shop')||'').trim(),poster:String(data.get('poster')||'').trim(),notes:String(data.get('notes')||'').trim(),created_at:old?.created_at||new Date().toISOString()};if(old)items=items.map(y=>y.id===x.id?x:y);else items.unshift(x);store();render();dialog.close();window.dispatchEvent(new CustomEvent('rc-wishlist-changed',{detail:{title:x.title,synced:null}}));const ok=await writeRemote(x,old?'PATCH':'POST');if(ok)status('Filmwens opgeslagen en gesynchroniseerd.');else if(!remoteReady)status('Filmwens opgeslagen op dit apparaat.');window.dispatchEvent(new CustomEvent('rc-wishlist-changed',{detail:{title:x.title,synced:ok}}));});
@@ -4066,6 +4106,7 @@ window.rcWishlistAPI={
   form.elements.year.value=Number.isInteger(year)&&year>=1880&&year<=2100?String(year):'';
   const poster=String(movie.poster||'');
   form.elements.poster.value=/^https:\/\/image\.tmdb\.org\/t\/p\/[^\s]+$/i.test(poster)?poster:'';
+  updatePosterPreview();
   // Opmerkingen gaan over de gewenste fysieke uitgave, niet over de filmsynopsis.
    form.elements.notes.value='';
   form.elements.format.value='Blu-ray';
