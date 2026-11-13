@@ -3953,7 +3953,7 @@ function shopOpen(x,storesOnly=false,fullPage=false,origin=null){
  shopPanel.querySelector('.fw-shop-back').onclick=()=>storesOnly?(shopOrigin==='film'?shopOpen(x,false,true):shopBack()):shopBack();
  const body=shopPanel.querySelector('#fwShopBody');
  if(fullPage){
-  body.innerHTML='<div class="fw-feature-layout"><div class="fw-feature-poster">'+poster+(admin()?'<button type="button" class="fw-change-poster" data-poster>✎ Poster wijzigen</button>':'')+'</div><div class="fw-feature-main"><div class="film-kicker">DE FILMWINKEL · FILMPAGINA</div><h2 class="fw-feature-title">'+esc(x.title)+(x.year?' <span>('+esc(x.year)+')</span>':'')+'</h2>'+(x.notes?'<p class="fw-shop-personal-note fw-shop-personal-note-full"><strong>Mijn opmerking</strong>'+esc(x.notes)+'</p>':'')+'<div class="fw-full-actions"><button type="button" data-buy>Waar te koop?</button><button type="button" data-return>Terug naar Filmwinkel</button></div><section class="fw-feature-section"><h3>Over de film</h3><p data-overview>Filmgegevens ophalen via TMDB…</p></section><section class="fw-feature-section"><h3>Regisseur</h3><div data-director>Wordt opgehaald…</div></section><section class="fw-feature-section"><h3>Acteurs</h3><div class="fw-feature-cast" data-cast>Worden opgehaald…</div></section></div><aside class="fw-feature-trailer"><h3>Trailer</h3><div class="fw-feature-video" data-trailer>Trailer wordt opgehaald…</div></aside></div>';
+  body.innerHTML='<div class="fw-feature-layout"><div class="fw-feature-poster">'+poster+(admin()?'<button type="button" class="fw-change-poster" data-poster>✎ Poster wijzigen</button>':'')+'</div><div class="fw-feature-main"><div class="film-kicker">DE FILMWINKEL · FILMPAGINA</div><h2 class="fw-feature-title">'+esc(x.title)+(x.year?' <span>('+esc(x.year)+')</span>':'')+'</h2>'+(x.notes?'<p class="fw-shop-personal-note fw-shop-personal-note-full"><strong>Mijn opmerking</strong>'+esc(x.notes)+'</p>':'')+'<div class="fw-full-actions"><button type="button" data-buy>Waar te koop?</button><button type="button" data-return>Terug naar Filmwinkel</button></div><div class="rc-gaps-detail-links fw-shop-external-links" aria-label="Film op IMDb en Letterboxd"><span data-fw-letterboxd><span class="rating-logo lb"><span style="color:#ff8000">●</span><span style="color:#00e054">●</span><span style="color:#40bcf4">●</span> Letterboxd</span> · Ophalen…</span><span data-fw-imdb><span class="rating-logo imdb">IMDb</span> · Ophalen…</span></div><section class="fw-feature-section"><h3>Over de film</h3><p data-overview>Filmgegevens ophalen via TMDB…</p></section><section class="fw-feature-section"><h3>Regisseur</h3><div data-director>Wordt opgehaald…</div></section><section class="fw-feature-section"><h3>Acteurs</h3><div class="fw-feature-cast" data-cast>Worden opgehaald…</div></section></div><aside class="fw-feature-trailer"><h3>Trailer</h3><div class="fw-feature-video" data-trailer>Trailer wordt opgehaald…</div></aside></div>';
   body.querySelector('[data-buy]').onclick=()=>shopOpen(x,true,false,'film');
   body.querySelector('[data-return]').onclick=shopBack;
   body.querySelector('[data-poster]')?.addEventListener('click',()=>chooseShopPoster(x));
@@ -4005,6 +4005,53 @@ async function chooseShopPoster(x){
  }catch(err){if(overlay.isConnected)msg.textContent='Posters ophalen mislukt: '+err.message}
 }
 const fwMetadataCache=new Map();
+const fwImdbIdCache=new Map();
+// Maak pas een klikbare link wanneer het exacte TMDB- of IMDb-filmnummer bekend is.
+function fwSetExternalLink(body,kind,url,message='Niet beschikbaar'){
+ const target=body.querySelector('[data-fw-'+kind+']');
+ if(!target)return;
+ const isImdb=kind==='imdb';
+ const logo=isImdb?'<span class="rating-logo imdb">IMDb ↗</span>':
+  '<span class="rating-logo lb"><span style="color:#ff8000">●</span><span style="color:#00e054">●</span><span style="color:#40bcf4">●</span> Letterboxd ↗</span>';
+ const safe=isImdb?/^https:\/\/www\.imdb\.com\/title\/tt\d+\/$/.test(url||''):
+  /^https:\/\/letterboxd\.com\/tmdb\/\d+\/$/.test(url||'');
+ if(safe){
+  const link=document.createElement('a');
+  link.setAttribute('data-fw-'+kind,'');
+  link.className=isImdb?'rc-gaps-link-imdb':'rc-gaps-link-letterboxd';
+  link.href=url;link.target='_blank';link.rel='noopener noreferrer';
+  link.setAttribute('aria-label','Open deze film rechtstreeks op '+(isImdb?'IMDb':'Letterboxd'));
+  link.innerHTML=logo;
+  target.replaceWith(link);
+ }else{
+  const span=document.createElement('span');
+  span.setAttribute('data-fw-'+kind,'');
+  span.innerHTML=logo.replace(' ↗','')+' · '+String(message).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  target.replaceWith(span);
+ }
+}
+async function fwLoadImdbLink(tmdbId,body,valid){
+ if(!fwImdbIdCache.has(tmdbId)){
+  const job=fetch(SUPABASE_URL+'/functions/v1/film-metadata',{
+   method:'POST',
+   headers:{'apikey':SUPABASE_PUBLISHABLE_KEY,'Authorization':'Bearer '+SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},
+   body:JSON.stringify({tmdb_id:tmdbId})
+  }).then(async r=>{
+   const d=await r.json().catch(()=>({}));
+   if(!r.ok)throw Error(d.error||'HTTP '+r.status);
+   return /^tt\d+$/.test(String(d.imdb_id||''))?String(d.imdb_id):null;
+  });
+  fwImdbIdCache.set(tmdbId,job);
+  job.catch(()=>fwImdbIdCache.delete(tmdbId));
+ }
+ try{
+  const imdbId=await fwImdbIdCache.get(tmdbId);
+  if(valid())fwSetExternalLink(body,'imdb',imdbId?'https://www.imdb.com/title/'+imdbId+'/':null,'IMDb niet beschikbaar');
+ }catch(e){
+  if(valid())fwSetExternalLink(body,'imdb',null,'IMDb tijdelijk niet bereikbaar');
+  console.warn('Filmwinkel IMDb-link:',e);
+ }
+}
 function fwProfileImage(person){
  const path=String(person?.profile_path||'');
  return /^\/[\w/-]+\.(?:jpg|jpeg|png|webp)$/i.test(path)?'https://image.tmdb.org/t/p/w185'+path:'';
@@ -4022,6 +4069,18 @@ async function loadShopMetadata(x,body){
    fwMetadataCache.set(cacheKey,job);job.catch(()=>fwMetadataCache.delete(cacheKey));
   }
   const f=await fwMetadataCache.get(cacheKey);if(!valid())return;
+  const tmdbId=Number(f.tmdb_id||f.tmdbId);
+  if(Number.isSafeInteger(tmdbId)&&tmdbId>0){
+   fwSetExternalLink(body,'letterboxd','https://letterboxd.com/tmdb/'+tmdbId+'/');
+   if(/^tt\d+$/.test(String(f.imdb_id||''))){
+    fwSetExternalLink(body,'imdb','https://www.imdb.com/title/'+f.imdb_id+'/');
+   }else{
+    fwLoadImdbLink(tmdbId,body,valid);
+   }
+  }else{
+   fwSetExternalLink(body,'letterboxd',null,'Filmnummer niet gevonden');
+   fwSetExternalLink(body,'imdb',null,'Filmnummer niet gevonden');
+  }
   overview.textContent=f.overview||'Geen beschrijving beschikbaar via TMDB.';
   const d=f.director_profile;
   director.innerHTML=d?.name?'<div class="fw-feature-person">'+(fwProfileImage(d)?'<img src="'+esc(fwProfileImage(d))+'" alt="Portret van '+esc(d.name)+'" loading="lazy">':'')+'<strong>'+esc(d.name)+'</strong></div>':esc(f.director||'Nog niet bekend');
@@ -4029,7 +4088,7 @@ async function loadShopMetadata(x,body){
   cast.innerHTML=people.length?people.map(a=>'<div class="fw-feature-actor">'+(fwProfileImage(a)?'<img src="'+esc(fwProfileImage(a))+'" alt="Portret van '+esc(a.name)+'" loading="lazy">':'<div class="fw-feature-actor-empty">◈</div>')+'<strong>'+esc(a.name)+'</strong>'+(a.character?'<small>'+esc(a.character)+'</small>':'')+'</div>').join(''):'Geen acteurs beschikbaar.';
   const key=String(f.youtube_key||'');
   trailer.innerHTML=/^[A-Za-z0-9_-]{11}$/.test(key)?'<a href="https://www.youtube.com/watch?v='+encodeURIComponent(key)+'" target="_blank" rel="noopener noreferrer"><img src="https://img.youtube.com/vi/'+encodeURIComponent(key)+'/hqdefault.jpg" alt="Trailer voorbeeld"><span>▶ Trailer bekijken</span></a>':'<p>Geen trailer gevonden via TMDB.</p>';
- }catch(e){if(!valid())return;overview.textContent='TMDB-gegevens ophalen mislukt. Controleer of de Supabase-functie filmwinkel-metadata is gepubliceerd.';director.textContent='Niet beschikbaar';cast.textContent='Niet beschikbaar';trailer.textContent='Trailer niet beschikbaar.';console.warn('Filmwinkel TMDB:',e)}
+ }catch(e){if(!valid())return;fwSetExternalLink(body,'letterboxd',null,'Tijdelijk niet beschikbaar');fwSetExternalLink(body,'imdb',null,'Tijdelijk niet beschikbaar');overview.textContent='TMDB-gegevens ophalen mislukt. Controleer of de Supabase-functie filmwinkel-metadata is gepubliceerd.';director.textContent='Niet beschikbaar';cast.textContent='Niet beschikbaar';trailer.textContent='Trailer niet beschikbaar.';console.warn('Filmwinkel TMDB:',e)}
 }
 function render(){let list=items.slice(),filter=$('fwFilter').value,sort=$('fwSort').value;if(filter!=='all')list=list.filter(x=>x.priority===filter);list.sort((a,b)=>sort==='title'?a.title.localeCompare(b.title,'nl'):sort==='new'?String(b.created_at).localeCompare(String(a.created_at)):(prio[a.priority]??2)-(prio[b.priority]??2)||String(b.created_at).localeCompare(String(a.created_at)));shelf.replaceChildren();$('fwAdd').hidden=!admin();for(const el of [$('fwImport'),$('fwExport')])if(el)el.hidden=!admin();if(!list.length){const p=document.createElement('div');p.className='fw-empty';p.innerHTML='<strong>De etalage is nog leeg.</strong><p>Er staan nog geen films in deze selectie.</p>';shelf.append(p);return}for(const x of list){const card=document.createElement('article');card.className='fw-card';card.tabIndex=0;card.setAttribute('role','button');card.setAttribute('aria-label','Bekijk '+x.title);const pic=x.poster&&/^https:\/\//.test(x.poster)?'<img class="fw-poster" loading="lazy" alt="" src="'+esc(x.poster)+'">':'<div class="fw-placeholder">'+esc(x.title)+'</div>';const label=x.priority==='must'?'★★★ Absolute must-have':x.priority==='high'?'★★ Graag hebben':'★ Leuk om te hebben';card.innerHTML=pic+'<h3>'+esc(x.title)+(x.year?' ('+esc(x.year)+')':'')+'</h3><div class="fw-meta">'+esc(x.format)+'</div><span class="fw-ribbon">'+label+'</span>'+(x.price!=null?'<div class="fw-meta">Richtprijs: € '+Number(x.price).toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div>':'')+(x.shop?'<div class="fw-meta">Vindplaats: '+esc(x.shop)+'</div>':'')+(x.notes?'<p class="fw-note">'+esc(x.notes)+'</p>':'')+(admin()?'<div class="fw-card-actions"><button type="button" data-edit>✎ Bewerken</button><button type="button" data-bought>✓ Gekocht</button><button type="button" data-delete>Verwijderen</button></div>':'');card.onclick=e=>{if(!e.target.closest('button'))shopOpen(x)};card.onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&e.target===card){e.preventDefault();shopOpen(x)}};if(admin()){card.querySelector('[data-edit]').onclick=()=>open(x);card.querySelector('[data-bought]').onclick=()=>remove(x,true);card.querySelector('[data-delete]').onclick=()=>remove(x,false)}shelf.append(card)}}
 new MutationObserver(()=>render()).observe($('adminToggle'),{childList:true});
