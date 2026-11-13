@@ -64,6 +64,21 @@ nav button.active{background:#d9ed80;color:#182016;border-color:#d9ed80}
 .cast-card{min-width:0}.cast-photo{width:100%;aspect-ratio:3/4;border-radius:8px;background:linear-gradient(135deg,#283448,#121927);border:1px solid #334052;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#aebed0;font-size:31px}
 .cast-photo img{width:100%;height:100%;object-fit:cover}.cast-name{font-weight:650;font-size:12px;line-height:1.4;margin-top:8px}.cast-role{font-size:11px;color:#97a5b8;margin-top:3px}
 .cast-toggle{background:#202c3e;border:1px solid #3a4a60;color:#d9ed80;border-radius:7px;padding:9px 12px;cursor:pointer;font-size:12px}
+/* Filmcollectie: makers van de film, direct onder de acteurs. */
+.film-crew{margin-top:15px;background:linear-gradient(135deg,#0e2925,#101e20);border-color:#365d50}
+.film-crew>h3{color:#f2ede2;margin:0 0 15px;font-family:Georgia,serif;font-size:23px}
+.film-crew-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.film-crew-group{background:#10342d;border:1px solid #416252;border-radius:10px;padding:14px;min-width:0}
+.film-crew-group h4{font-size:15px;color:#e2d0a9;font-weight:750;margin:0 0 12px}
+.film-crew-list{display:flex;flex-direction:column;gap:9px}
+.film-crew-person{display:flex;align-items:center;gap:11px;padding:8px;border-radius:8px;background:#0b2622;border:1px solid #315046;min-width:0}
+.film-crew-photo{width:48px;height:62px;flex:0 0 48px;border-radius:6px;object-fit:cover;background:#1c4037;display:flex;align-items:center;justify-content:center;color:#c3d3c8;font-size:23px;overflow:hidden}
+.film-crew-photo img{width:100%;height:100%;object-fit:cover}
+.film-crew-person-name{font-size:13px;color:#f3f2eb;font-weight:700;line-height:1.35;overflow-wrap:anywhere}
+.film-crew-person-job{font-size:11px;color:#bac9bf;margin-top:4px;line-height:1.35}
+.film-crew-empty{color:#adbbb3;font-size:12px;margin:3px 0}
+@media(max-width:960px){.film-crew-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:580px){.film-crew-grid{grid-template-columns:1fr}.film-crew-group{padding:12px}}
 @media(max-width:760px){.film-detail-grid{grid-template-columns:112px minmax(0,1fr);gap:16px}.film-detail-grid .poster{max-width:112px}.film-detail-grid .details h2{font-size:26px}.film-rating-row{gap:6px}.film-rating-row .stat{padding:11px 8px}.film-rating-row .stat strong{font-size:22px}.film-detail-sections{grid-template-columns:1fr}.cast-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}}
 
 /* V7 — compact physical editions, prominent watch status and clearer language */
@@ -2217,10 +2232,13 @@ function detail(f){
  ? (watchCounts.editions.get(String(f.editions[0].dbId))||0)+Number(f.editions[0].watchOffset||0)
  : (watchCounts.cuts.get(cutName(c.title,f.title).toLocaleLowerCase('nl-NL'))||0)+Number(c.watchOffset||0)),discGroups(f).some(g=>g.name===cutName(c.title,f.title)&&g.seen))}${esc(displayFilmTitle(c.title))}${c.runtimes.length?' ('+c.runtimes.map(n=>n+' min').join(' / ')+')':''}</div>`).join('')}</section></div>
  <section class="panel film-director"><h3>🎥 Regisseur${rcDirectorNames(f.director).length>1?'s':''}</h3><div id="directorCards" class="rc-director-cards">${rcDirectorNames(f.director).map((name,i)=>`<button type="button" class="director-card" data-director-index="${i}"><span class="director-photo" ${i===0?'id="directorPhoto"':''} style="display:flex;align-items:center;justify-content:center">◈</span><span><strong>${esc(name)}</strong><small>Bekijk films van deze regisseur →</small></span></button>`).join('')}</div></section><section class="panel film-cast"><div class="film-cast-head"><h3 style="margin:0">🎭 Acteurs</h3><button class="cast-toggle" id="castToggle" style="display:none">Toon volledige cast</button></div><div class="cast-grid" id="castGrid"></div><p class="muted" id="castInfo" style="font-size:12px;margin-bottom:0"></p></section><section class="panel country-panel"><h3>🌍 Landen van herkomst</h3><div class="country-chips" id="filmCountryChips"><span class="country-hint">Productielanden ophalen…</span></div></section>${rcAVShowcase(f.editions||[])}`;
+ // Voeg de makers toe na de acteurs, vóór de landen en technische specificaties.
+ const castSection=$('detailBody').querySelector('.film-cast');
+ if(castSection)castSection.insertAdjacentHTML('afterend',`<section class="panel film-crew" id="filmCrew"><h3>🎬 Achter de schermen</h3><div class="film-crew-grid"><div class="film-crew-group"><h4>✍️ Scenario / Writer</h4><div id="filmCrewWriters" class="film-crew-list"><p class="film-crew-empty">Gegevens ophalen…</p></div></div><div class="film-crew-group"><h4>📷 Cinematografie</h4><div id="filmCrewCamera" class="film-crew-list"><p class="film-crew-empty">Gegevens ophalen…</p></div></div><div class="film-crew-group"><h4>🎼 Muziek / Composer</h4><div id="filmCrewMusic" class="film-crew-list"><p class="film-crew-empty">Gegevens ophalen…</p></div></div></div></section>`);
  rcLoadFilmFinance(f);
  rcLoadFilmTrivia(f);
  document.querySelectorAll('[data-open-film-history]').forEach(el=>{el.addEventListener('click',()=>showFilmDiary(f));el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showFilmDiary(f)}})});
- const actions=document.querySelector('.detail-topbar .detail-actions');let trailerPanel=document.querySelector('#detail .trailer-panel');if(!trailerPanel){trailerPanel=document.createElement('section');trailerPanel.className='panel trailer-panel';trailerPanel.innerHTML='<h3>🎬 Trailer</h3><div class="trailer-box" id="trailerBox">Trailer wordt opgehaald via TMDB…</div>';actions.append(trailerPanel)}else{$('trailerBox').textContent='Trailer wordt opgehaald via TMDB…'}syncIPadTrailerPlacement();$('changeFilmPoster').hidden=!adminSession;$('changeFilmPoster').style.display=adminSession?'':'none';$('changeFilmPoster').addEventListener('click',()=>choosePoster(f,id));document.querySelectorAll('#directorCards [data-director-index]').forEach(card=>{const name=rcDirectorNames(f.director)[Number(card.dataset.directorIndex)];card.onclick=()=>{const cached=peopleMetadataCache.get(Number(f._tmdbId));const direct=card.querySelector('img')?.src||'';if(direct){filterPerson(name,direct);return}filterPerson(name);if(cached)Promise.resolve(cached).then(meta=>{const person=(meta.director_profiles||[]).find(p=>p.name===name);const path=person?.photo_url;if(path&&rcPersonFilterActive){const banner=$('personFilterBanner');if(banner&&banner.textContent.includes(name)&&!banner.querySelector('img')){const image=document.createElement('img');image.src=path;image.alt=name;banner.querySelector('.person-filter-info')?.prepend(image)}}}).catch(()=>{})}});$('soundtrackButton').onclick=()=>openFilmSoundtrack(f);$('spotifyEditLink').hidden=!adminSession;$('spotifyEditLink').style.display=adminSession?'':'none';$('spotifyEditLink').onclick=()=>{if(adminSession)configureSpotify(f)};show('detail');watchPosters();renderCast(f,id);renderFilmCountries(f,id);loadPublicTrailer(f,id);
+ const actions=document.querySelector('.detail-topbar .detail-actions');let trailerPanel=document.querySelector('#detail .trailer-panel');if(!trailerPanel){trailerPanel=document.createElement('section');trailerPanel.className='panel trailer-panel';trailerPanel.innerHTML='<h3>🎬 Trailer</h3><div class="trailer-box" id="trailerBox">Trailer wordt opgehaald via TMDB…</div>';actions.append(trailerPanel)}else{$('trailerBox').textContent='Trailer wordt opgehaald via TMDB…'}syncIPadTrailerPlacement();$('changeFilmPoster').hidden=!adminSession;$('changeFilmPoster').style.display=adminSession?'':'none';$('changeFilmPoster').addEventListener('click',()=>choosePoster(f,id));document.querySelectorAll('#directorCards [data-director-index]').forEach(card=>{const name=rcDirectorNames(f.director)[Number(card.dataset.directorIndex)];card.onclick=()=>{const cached=peopleMetadataCache.get(Number(f._tmdbId));const direct=card.querySelector('img')?.src||'';if(direct){filterPerson(name,direct);return}filterPerson(name);if(cached)Promise.resolve(cached).then(meta=>{const person=(meta.director_profiles||[]).find(p=>p.name===name);const path=person?.photo_url;if(path&&rcPersonFilterActive){const banner=$('personFilterBanner');if(banner&&banner.textContent.includes(name)&&!banner.querySelector('img')){const image=document.createElement('img');image.src=path;image.alt=name;banner.querySelector('.person-filter-info')?.prepend(image)}}}).catch(()=>{})}});$('soundtrackButton').onclick=()=>openFilmSoundtrack(f);$('spotifyEditLink').hidden=!adminSession;$('spotifyEditLink').style.display=adminSession?'':'none';$('spotifyEditLink').onclick=()=>{if(adminSession)configureSpotify(f)};show('detail');watchPosters();renderCast(f,id);loadFilmCrew(f,id);renderFilmCountries(f,id);loadPublicTrailer(f,id);
 }
 // Publieke trailers via de Supabase Edge Function; TMDB-secret blijft op de server.
 async function loadPublicTrailer(f,id){
@@ -2453,6 +2471,61 @@ async function getPeopleMetadata(f){
   request.catch(()=>peopleMetadataCache.delete(id));
  }
  return peopleMetadataCache.get(id);
+}
+// Filmcredits zijn alleen zichtbaar op de gewone collectie-filmpagina.
+// Deze aparte, read-only functie laat de bestaande film-metadata intact.
+const rcFilmCrewCache=new Map();
+async function loadFilmCrew(f,detailId){
+ const panel=document.getElementById('filmCrew');
+ if(!panel)return;
+ const tmdbId=Number(f._tmdbId);
+ const validId=Number.isSafeInteger(tmdbId)&&tmdbId>0;
+ const requestBody=validId?{tmdb_id:tmdbId}:{title:String(f.title||''),year:Number(f.year)||null};
+ const cacheKey=validId?'tmdb:'+tmdbId:'title:'+String(f.title||'').toLocaleLowerCase('nl-NL')+'|'+String(f.year||'');
+ try{
+  if(!rcFilmCrewCache.has(cacheKey)){
+   const job=fetch(SUPABASE_URL+'/functions/v1/film-crew',{
+    method:'POST',
+    headers:{'apikey':SUPABASE_PUBLISHABLE_KEY,'Authorization':'Bearer '+SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify(requestBody)
+   }).then(async response=>{
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok||result.error)throw Error(result.error||'HTTP '+response.status);
+    return result;
+   });
+   rcFilmCrewCache.set(cacheKey,job);
+   job.catch(()=>rcFilmCrewCache.delete(cacheKey));
+  }
+  const data=await rcFilmCrewCache.get(cacheKey);
+  if(activeDetailId!==detailId||!panel.isConnected||document.getElementById('filmCrew')!==panel)return;
+  const photoUrl=person=>{
+   const path=String(person.profile_path||'');
+   return /^\/[\w/-]+\.(?:jpg|jpeg|png|webp)$/i.test(path)?'https://image.tmdb.org/t/p/w185'+path:'';
+  };
+  const display=(targetId,people)=>{
+   const target=panel.querySelector('#'+targetId);
+   if(!target)return;
+   const unique=new Set();
+   const persons=(Array.isArray(people)?people:[]).filter(p=>{
+    if(!p||!String(p.name||'').trim())return false;
+    const key=String(p.id||p.name).toLocaleLowerCase('nl-NL');
+    if(unique.has(key))return false;
+    unique.add(key);return true;
+   });
+   if(!persons.length){target.innerHTML='<p class="film-crew-empty">Niet vermeld bij TMDB.</p>';return;}
+   target.innerHTML=persons.map(p=>{
+    const img=photoUrl(p);
+    return `<div class="film-crew-person"><span class="film-crew-photo">${img?`<img loading="lazy" src="${esc(img)}" alt="Portret van ${esc(p.name)}" onerror="this.replaceWith(document.createTextNode('◈'))">`:'◈'}</span><span><span class="film-crew-person-name">${esc(p.name)}</span>${p.job?`<span class="film-crew-person-job" style="display:block">${esc(p.job)}</span>`:''}</span></div>`;
+   }).join('');
+  };
+  display('filmCrewWriters',data.writers);
+  display('filmCrewCamera',data.cinematographers);
+  display('filmCrewMusic',data.composers);
+ }catch(e){
+  if(activeDetailId!==detailId||!panel.isConnected||document.getElementById('filmCrew')!==panel)return;
+  panel.querySelectorAll('.film-crew-list').forEach(target=>{target.innerHTML='<p class="film-crew-empty">Gegevens momenteel niet beschikbaar.</p>';});
+  console.warn('TMDB filmcrew kon niet worden opgehaald:',e);
+ }
 }
 function renderCast(f,id){
  const cast=String(f.cast||'').split(/\s*\|\s*|\s*;\s*|\s*,\s*/).map(x=>x.trim()).filter(Boolean);
